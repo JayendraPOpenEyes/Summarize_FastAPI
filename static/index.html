@@ -1,0 +1,433 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Bill Summarization</title>
+  <style>
+    /* Modern, responsive CSS styling using grid for three columns */
+    body {
+      font-family: Arial, sans-serif;
+      background-color: #f4f4f4;
+      margin: 0;
+      padding: 0;
+    }
+    .container {
+      max-width: 1200px;
+      margin: 30px auto;
+      padding: 20px;
+      background-color: #fff;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    header {
+      text-align: center;
+      padding-bottom: 20px;
+    }
+    header img {
+      width: 100px;
+      border-radius: 20px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    header h1 {
+      margin: 10px 0;
+    }
+    form {
+      display: flex;
+      flex-direction: column;
+    }
+    .form-group {
+      margin-bottom: 15px;
+    }
+    .form-group label {
+      font-weight: bold;
+      margin-bottom: 5px;
+      display: block;
+    }
+    input[type="text"],
+    input[type="url"],
+    input[type="file"],
+    textarea,
+    select {
+      width: 100%;
+      padding: 10px;
+      border: 1px solid #ccc;
+      border-radius: 5px;
+      box-sizing: border-box;
+    }
+    textarea {
+      resize: vertical;
+      min-height: 150px;
+    }
+    button.submit-btn {
+      background-color: #4CAF50;
+      color: white;
+      padding: 10px 16px;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+      font-size: 16px;
+    }
+    button.submit-btn:hover {
+      background-color: #45a049;
+    }
+    .result {
+      margin-top: 20px;
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 20px;
+    }
+    .result-box {
+      background-color: #e6ffe6;
+      padding: 15px;
+      border-radius: 5px;
+      white-space: pre-wrap;
+      position: relative;
+    }
+    .result-box h3 {
+      margin-top: 0;
+    }
+    .copy-icon {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      width: 20px;
+      height: 20px;
+      cursor: pointer;
+    }
+    .feedback-section {
+      margin-top: 10px;
+      border-top: 1px solid #ccc;
+      padding-top: 10px;
+    }
+    .feedback-section button {
+      padding: 5px 10px;
+      font-size: 14px;
+      margin-right: 5px;
+      cursor: pointer;
+    }
+    .feedback-section input.feedback-comment {
+      width: calc(100% - 120px);
+      padding: 5px;
+      font-size: 14px;
+    }
+    .feedback-section .feedback-submit-btn {
+      padding: 5px 10px;
+      font-size: 14px;
+      cursor: pointer;
+    }
+    .hidden {
+      display: none;
+    }
+    .flex-between {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .small-btn {
+      padding: 6px 10px;
+      font-size: 14px;
+      margin: 0;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <img src="/static/logo.jpg" alt="Logo">
+      <h1>Bill Summarization</h1>
+      <p>Enter a URL, upload a PDF, or choose a previously uploaded file to generate three summaries (GPT‑4, GPT‑4‑mini, and TogetherAI).</p>
+    </header>
+    <form id="summarize-form">
+      <div class="form-group">
+        <label for="inputType">Select Input Type</label>
+        <select id="inputType" name="inputType">
+          <option value="url">Enter URL</option>
+          <option value="upload">Upload PDF</option>
+          <option value="choose_file">Choose File</option>
+        </select>
+      </div>
+      <div class="form-group" id="urlGroup">
+        <label for="documentUrl">Document URL</label>
+        <input type="url" id="documentUrl" name="documentUrl" placeholder="Enter the URL of the PDF">
+      </div>
+      <div class="form-group hidden" id="fileGroup">
+        <label for="documentFile">Upload PDF</label>
+        <input type="file" id="documentFile" name="documentFile" accept=".pdf">
+      </div>
+      <div class="form-group hidden" id="chooseFileGroup">
+        <label for="chooseFile">Choose a Previously Uploaded File</label>
+        <select id="chooseFile" name="chooseFile">
+          <!-- Options will be populated dynamically -->
+        </select>
+        <input type="hidden" id="overrideBaseName" name="override_base_name" value="">
+      </div>
+      <div class="form-group">
+        <div class="flex-between">
+          <label for="customPrompt">Custom Prompt</label>
+          <button type="button" id="samplePromptButton" class="small-btn">Sample Prompt</button>
+        </div>
+        <textarea id="customPrompt" name="customPrompt" placeholder="Enter your custom prompt"></textarea>
+      </div>
+      <button type="submit" class="submit-btn">Summarize</button>
+    </form>
+    <div id="loading" class="hidden">
+      <p>Processing... Please wait.</p>
+    </div>
+    <div class="result" id="result">
+      <!-- Three summary boxes will be displayed here -->
+    </div>
+  </div>
+
+  <script>
+    // Sample Prompt functionality
+    const samplePromptText = `Summarize the provided legislative document, focusing only on new provisions introduced by this bill.
+Start each summary with 'This measure...'.
+The summary must be at least one paragraph long (minimum 4-6 sentences) and no longer than a full page,
+detailing key changes such as definitions, rules, or exemptions, without including opinions, current laws,
+or repetitive statements.
+Do not add a title, introduction, or conclusion (e.g., 'in summary'); the entire text should be the summary.
+If the document specifies an effective date, end the summary with 'This measure has an effective date of: [date]',
+using the exact date provided; otherwise, do not include any effective date statement.`;
+    document.getElementById('samplePromptButton').addEventListener('click', function() {
+      document.getElementById('customPrompt').value = samplePromptText;
+    });
+
+    // Toggle input groups based on selected input type
+    const inputTypeEl = document.getElementById('inputType');
+    const urlGroup = document.getElementById('urlGroup');
+    const fileGroup = document.getElementById('fileGroup');
+    const chooseFileGroup = document.getElementById('chooseFileGroup');
+    const chooseFileEl = document.getElementById('chooseFile');
+    const overrideBaseNameEl = document.getElementById('overrideBaseName');
+    inputTypeEl.addEventListener('change', function() {
+      const selected = this.value;
+      if (selected === 'url') {
+        urlGroup.classList.remove('hidden');
+        fileGroup.classList.add('hidden');
+        chooseFileGroup.classList.add('hidden');
+      } else if (selected === 'upload') {
+        fileGroup.classList.remove('hidden');
+        urlGroup.classList.add('hidden');
+        chooseFileGroup.classList.add('hidden');
+      } else if (selected === 'choose_file') {
+        chooseFileGroup.classList.remove('hidden');
+        urlGroup.classList.add('hidden');
+        fileGroup.classList.add('hidden');
+        fetchFiles();
+      }
+    });
+
+    // Fetch list of files from the API for guest user
+    async function fetchFiles() {
+      try {
+        const response = await fetch(`/list_files`);
+        if (!response.ok) throw new Error('Could not fetch file list');
+        const files = await response.json();
+        chooseFileEl.innerHTML = "";
+        for (const [fileName, fileUrl] of Object.entries(files)) {
+          const option = document.createElement('option');
+          option.value = fileUrl;  // signed URL
+          option.textContent = fileName;
+          option.setAttribute('data-filename', fileName);
+          chooseFileEl.appendChild(option);
+        }
+        if (chooseFileEl.options.length > 0) {
+          overrideBaseNameEl.value = chooseFileEl.options[0].getAttribute('data-filename');
+        }
+      } catch (error) {
+        console.error(error);
+      }
+    }
+    chooseFileEl.addEventListener('change', function() {
+      const selectedOption = this.options[this.selectedIndex];
+      overrideBaseNameEl.value = selectedOption.getAttribute('data-filename');
+    });
+
+    // Typewriter Effect function (always used)
+    function typewriterEffect(element, text, delay = 20) {
+      text = text || "";
+      element.textContent = "";
+      let i = 0;
+      function type() {
+        if (i < text.length) {
+          element.textContent += text.charAt(i);
+          i++;
+          setTimeout(type, delay);
+        }
+      }
+      type();
+    }
+
+    // Copy to clipboard function using icon (no alert)
+    function copyText(text) {
+      navigator.clipboard.writeText(text).catch((err) => {
+        console.error("Error copying text: ", err);
+      });
+    }
+
+    // Function to add feedback controls to a result box
+    function addFeedbackControls(box, summary_id, modelLabel) {
+      const feedbackDiv = document.createElement('div');
+      feedbackDiv.classList.add('feedback-section');
+      feedbackDiv.innerHTML = `
+        <button class="feedback-btn" data-feedback="like">👍</button>
+        <button class="feedback-btn" data-feedback="dislike">👎</button>
+        <input type="text" placeholder="Add a comment (optional)" class="feedback-comment">
+        <button class="feedback-submit-btn">Submit Feedback</button>
+      `;
+      box.appendChild(feedbackDiv);
+      let selectedFeedback = "";
+      const feedbackButtons = feedbackDiv.querySelectorAll('.feedback-btn');
+      feedbackButtons.forEach(btn => {
+        btn.addEventListener('click', () => {
+          feedbackButtons.forEach(b => b.style.backgroundColor = '');
+          btn.style.backgroundColor = '#ddd';
+          selectedFeedback = btn.getAttribute('data-feedback');
+        });
+      });
+      feedbackDiv.querySelector('.feedback-submit-btn').addEventListener('click', async () => {
+        const comment = feedbackDiv.querySelector('.feedback-comment').value;
+        if (!selectedFeedback) {
+          alert("Please select like or dislike.");
+          return;
+        }
+        const formData = new URLSearchParams();
+        formData.append('summary_id', summary_id);
+        formData.append('model', modelLabel);
+        formData.append('feedback', selectedFeedback);
+        formData.append('comment', comment);
+        try {
+          const res = await fetch('/feedback', {
+            method: 'POST',
+            body: formData,
+          });
+          if (res.ok) {
+            feedbackDiv.innerHTML = "<p>Feedback submitted.</p>";
+          } else {
+            let errMsg = await res.text();
+            console.error("Error submitting feedback:", errMsg);
+          }
+        } catch (error) {
+          console.error(error);
+        }
+      });
+    }
+
+    // Handle form submission: display three summaries using typewriter effect and add feedback controls
+    document.getElementById('summarize-form').addEventListener('submit', async function(e) {
+      e.preventDefault();
+      const formData = new FormData(this);
+      const inputType = formData.get('inputType');
+      const customPrompt = formData.get('customPrompt');
+
+      document.getElementById('loading').classList.remove('hidden');
+      document.getElementById('result').innerHTML = '';
+
+      try {
+        let response;
+        if (inputType === 'url') {
+          const documentUrl = formData.get('documentUrl');
+          const urlData = new URLSearchParams();
+          urlData.append('url', documentUrl);
+          urlData.append('custom_prompt', customPrompt);
+          response = await fetch('/summarize/url', {
+            method: 'POST',
+            body: urlData,
+          });
+        } else if (inputType === 'upload') {
+          const documentFile = formData.get('documentFile');
+          const uploadData = new FormData();
+          uploadData.append('file', documentFile);
+          uploadData.append('custom_prompt', customPrompt);
+          response = await fetch('/summarize/upload', {
+            method: 'POST',
+            body: uploadData,
+          });
+        } else if (inputType === 'choose_file') {
+          const chosenUrl = formData.get('chooseFile'); // signed URL
+          const overrideBaseName = formData.get('override_base_name');
+          const urlData = new URLSearchParams();
+          urlData.append('url', chosenUrl);
+          urlData.append('custom_prompt', customPrompt);
+          urlData.append('override_base_name', overrideBaseName);
+          response = await fetch('/summarize/url', {
+            method: 'POST',
+            body: urlData,
+          });
+        }
+        if (!response.ok) {
+          throw new Error('Error: ' + response.statusText);
+        }
+        const resultData = await response.json();
+        console.log("Result data:", resultData);
+        const resultContainer = document.getElementById('result');
+        resultContainer.innerHTML = "";
+
+        // Create summary box for GPT-4 Summary
+        const boxGPT4 = document.createElement('div');
+        boxGPT4.classList.add('result-box');
+        const titleGPT4 = document.createElement('h3');
+        titleGPT4.textContent = "GPT-4 Summary";
+        boxGPT4.appendChild(titleGPT4);
+        const copyIconGPT4 = document.createElement('img');
+        copyIconGPT4.src = "/static/copy-icon.jpg";
+        copyIconGPT4.alt = "Copy";
+        copyIconGPT4.classList.add('copy-icon');
+        copyIconGPT4.addEventListener('click', function() {
+          copyText(resultData.gpt4.summary);
+        });
+        boxGPT4.appendChild(copyIconGPT4);
+        const contentGPT4 = document.createElement('p');
+        boxGPT4.appendChild(contentGPT4);
+        resultContainer.appendChild(boxGPT4);
+        typewriterEffect(contentGPT4, resultData.gpt4.summary);
+        addFeedbackControls(boxGPT4, resultData.gpt4.summary_id, "GPT-4");
+
+        // Create summary box for GPT-4-mini Summary
+        const boxGPT4mini = document.createElement('div');
+        boxGPT4mini.classList.add('result-box');
+        const titleGPT4mini = document.createElement('h3');
+        titleGPT4mini.textContent = "GPT-4-mini Summary";
+        boxGPT4mini.appendChild(titleGPT4mini);
+        const copyIconGPT4mini = document.createElement('img');
+        copyIconGPT4mini.src = "/static/copy-icon.jpg";
+        copyIconGPT4mini.alt = "Copy";
+        copyIconGPT4mini.classList.add('copy-icon');
+        copyIconGPT4mini.addEventListener('click', function() {
+          copyText(resultData.gpt4mini.summary);
+        });
+        boxGPT4mini.appendChild(copyIconGPT4mini);
+        const contentGPT4mini = document.createElement('p');
+        boxGPT4mini.appendChild(contentGPT4mini);
+        resultContainer.appendChild(boxGPT4mini);
+        typewriterEffect(contentGPT4mini, resultData.gpt4mini.summary);
+        addFeedbackControls(boxGPT4mini, resultData.gpt4mini.summary_id, "GPT-4-mini");
+
+        // Create summary box for TogetherAI Summary
+        const boxTogether = document.createElement('div');
+        boxTogether.classList.add('result-box');
+        const titleTogether = document.createElement('h3');
+        titleTogether.textContent = "TogetherAI Summary";
+        boxTogether.appendChild(titleTogether);
+        const copyIconTogether = document.createElement('img');
+        copyIconTogether.src = "/static/copy-icon.jpg";
+        copyIconTogether.alt = "Copy";
+        copyIconTogether.classList.add('copy-icon');
+        copyIconTogether.addEventListener('click', function() {
+          copyText(resultData.togetherai.summary);
+        });
+        boxTogether.appendChild(copyIconTogether);
+        const contentTogether = document.createElement('p');
+        boxTogether.appendChild(contentTogether);
+        resultContainer.appendChild(boxTogether);
+        typewriterEffect(contentTogether, resultData.togetherai.summary);
+        addFeedbackControls(boxTogether, resultData.togetherai.summary_id, "TogetherAI");
+      } catch (error) {
+        document.getElementById('result').innerHTML = '<p style="color:red;">' + error + '</p>';
+      } finally {
+        document.getElementById('loading').classList.add('hidden');
+      }
+    });
+  </script>
+</body>
+</html>

@@ -21,12 +21,9 @@ from firebase_admin import credentials, firestore, storage
 import os
 from dotenv import load_dotenv
 
-# Load environment variables from .env file
 load_dotenv()
-
 logging.basicConfig(level=logging.DEBUG, format="%(asctime)s - %(levelname)s - %(message)s")
 
-# Initialize Firebase using local JSON credentials
 if not firebase_admin._apps:
     try:
         firebase_cred_path = "firebase-adminsdk.json"
@@ -37,23 +34,26 @@ if not firebase_admin._apps:
         cred = credentials.Certificate(firebase_cred_path)
         bucket_name = f"{creds['project_id']}.appspot.com"
         logging.debug(f"Constructed bucket name: {bucket_name}")
-        firebase_admin.initialize_app(cred, {
-            'storageBucket': bucket_name
-        })
+        firebase_admin.initialize_app(cred, {'storageBucket': bucket_name})
         logging.info(f"Firebase initialized with storage bucket: {bucket_name}")
     except Exception as e:
         logging.error(f"Failed to initialize Firebase: {str(e)}")
         raise
+
 db = firestore.client(database_id="statside-summary")
 
 class TextProcessor:
     def __init__(self, model):
         self.model = None
-        if model.lower() == "openai":
+        # Support for three models: GPT-4 (gpt4), GPT-4-mini (openai), and TogetherAI (togetherai)
+        if model.lower() in ["openai", "gpt4"]:
             self.openai_api_key = os.getenv("OPENAI_API_KEY")
             if not self.openai_api_key or self.openai_api_key.strip() == "":
                 raise ValueError("OPENAI_API_KEY is missing or empty in .env file.")
-            self.model = "gpt-4o-mini"
+            if model.lower() == "gpt4":
+                self.model = "gpt-4"
+            else:
+                self.model = "gpt-4o-mini"
             self.openai_client = openai.OpenAI(api_key=self.openai_api_key)
         elif model.lower() == "togetherai":
             self.together_api_key = os.getenv("TOGETHERAI_API_KEY")
@@ -61,7 +61,7 @@ class TextProcessor:
                 raise ValueError("TOGETHERAI_API_KEY is missing or empty in .env file.")
             self.model = "meta-llama/Llama-3.3-70B-Instruct-Turbo-Free"
         else:
-            raise ValueError(f"Unsupported model selection: {model}. Use 'openai' or 'togetherai'.")
+            raise ValueError(f"Unsupported model selection: {model}. Use 'openai', 'gpt4' or 'togetherai'.")
 
         logging.info(f"OpenAI API Key: {'Set' if hasattr(self, 'openai_api_key') and self.openai_api_key else 'Not Set'}")
         logging.info(f"TogetherAI API Key: {'Set' if hasattr(self, 'together_api_key') and self.together_api_key else 'Not Set'}")
@@ -103,14 +103,11 @@ class TextProcessor:
         if native_text and not self.is_blank_text(native_text):
             logging.info("Native PDF text extraction succeeded.")
             return native_text
-        
         images = convert_from_bytes(pdf_bytes)
         logging.info(f"OCR fallback: converting {len(images)} pages to images.")
         combined_text = ""
-
         def process_page(i, img):
             return self.process_image_with_tesseract(img)
-
         with ThreadPoolExecutor() as executor:
             results = executor.map(lambda x: process_page(x[0], x[1]), enumerate(images))
             for text in results:
@@ -136,20 +133,16 @@ class TextProcessor:
                     content_type = response.headers.get('Content-Type', '').lower()
                     logging.debug(f"URL: {url} returned Content-Type: {content_type}")
                     content = await response.read()
-                    
-                    # Check if it's a PDF by content type or URL extension (including 'octet-stream')
                     if ('application/pdf' in content_type or 'octet-stream' in content_type or url.lower().endswith('.pdf')):
                         text = self.extract_text_from_pdf(io.BytesIO(content), url)
                         if self.is_blank_text(text):
                             return {"text": "", "content_type": "pdf", "error": "blank_pdf"}
                         return {"text": text, "content_type": "pdf", "error": None}
-                    # Check if it's HTML
                     elif ('html' in content_type or url.lower().endswith(('.htm', '.html'))):
                         text = self.extract_text_from_html(content)
                         if self.is_blank_text(text):
                             return {"text": "", "content_type": "html", "error": "blank_html"}
                         return {"text": text, "content_type": "html", "error": None}
-                    # Check for plain text
                     elif 'text/plain' in content_type:
                         text = content.decode('utf-8', errors='ignore').strip()
                         if self.is_blank_text(text):
@@ -168,20 +161,16 @@ class TextProcessor:
             pdf_bytes = pdf_file.read()
             if not pdf_bytes:
                 return {"text": "", "content_type": "pdf", "error": "Empty PDF file"}
-
             native_text = self.extract_text_from_pdf_native(pdf_bytes)
             if native_text and not self.is_blank_text(native_text):
                 logging.info("Native PDF text extraction succeeded.")
                 return {"text": native_text, "content_type": "pdf", "error": None}
-
             logging.info("Native PDF extraction failed. Falling back to OCR.")
             images = convert_from_bytes(pdf_bytes)
             logging.info(f"OCR fallback: converting {len(images)} page(s) to images.")
             combined_text = ""
-
             def process_page(i, img):
                 return self.process_image_with_tesseract(img)
-
             with ThreadPoolExecutor() as executor:
                 results = executor.map(lambda x: process_page(x[0], x[1]), enumerate(images))
                 for text in results:
@@ -228,7 +217,6 @@ class TextProcessor:
             raise ValueError("Please enter a prompt or generate it through the sample prompt in the web app.")
         text = self.truncate_text(text, max_tokens=4000)
         prompt = custom_prompt + "\n\nText to summarize:\n" + text
-        
         logging.info(f"Sending prompt to OpenAI: {prompt[:100]}...")
         try:
             response = self.openai_client.chat.completions.create(
@@ -285,44 +273,36 @@ class TextProcessor:
         if not custom_prompt or custom_prompt.strip() == "":
             raise ValueError("Please enter a prompt or generate it through the sample prompt in the web app.")
         
-        if user_id =="guest":
-            user_id = "guest_user"
         summary_ref = db.collection("users").document(user_id).collection("summaries")
-        
+        # Check for an existing summary with the same file, prompt, and model.
         docs = summary_ref.where("base_name", "==", base_name).where("model", "==", self.model).stream()
         for doc in docs:
             existing_data = doc.to_dict()
             if existing_data.get("custom_prompt") == custom_prompt:
                 summary_id = doc.id
                 logging.info(f"Fetching existing summary for {summary_id} with same file, prompt, and model")
-                return {"summary": existing_data["summary"], "input_data": existing_data.get("input_data", ""), "file_url": existing_data.get("file_url", "")}
+                return {"summary": existing_data["summary"], "input_data": existing_data.get("input_data", ""), "file_url": existing_data.get("file_url", ""), "summary_id": summary_id}
         
         summary_id = f"{base_name}_{int(time.time())}"
-        
         logging.debug(f"Generating new summary for {base_name} with prompt: {custom_prompt[:50]}... and model: {self.model}")
         try:
             if "gpt" in self.model.lower():
-                if not hasattr(self, 'openai_api_key'):
-                    raise ValueError("OpenAI model selected but no OpenAI API key available.")
                 summary = self.generate_summary_openai(text, custom_prompt)
             else:
-                if not hasattr(self, 'together_api_key'):
-                    raise ValueError("TogetherAI model selected but no TogetherAI API key available.")
                 summary = self.generate_summary_togetherai(text, custom_prompt)
         except ValueError as e:
             raise e
         except Exception as e:
             raise ValueError(f"Unexpected error during summary generation: {str(e)}")
-
         if "Error" not in summary["summary"]:
             effective_date_pattern = r"(effective\s+(?:date\s*(?:is|of|:)?|on)|takes\s+effect\s+(?:on)?)\s*[:\s]*(?:(January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2}(?:st|nd|rd|th)?[,\s]+\d{4}|\d{1,2}(?:st|nd|rd|th)?\s+(January|February|March|April|May|June|July|August|September|October|November|December)[,\s]+\d{4}|\d{4}-\d{2}-\d{2}|\d{2}/\d{2}/\d{4})"
             match = re.search(effective_date_pattern, text, re.IGNORECASE)
             if match:
-                date_str = match.group(0).split(":", 1)[-1].strip() if ":" in match.group(0) else match.group(0).split("on", 1)[-1].strip() if "on" in match.group(0) else match.group(0).split("effect", 1)[-1].strip()
+                date_str = (match.group(0).split(":", 1)[-1].strip() if ":" in match.group(0)
+                            else match.group(0).split("on", 1)[-1].strip() if "on" in match.group(0)
+                            else match.group(0).split("effect", 1)[-1].strip())
                 summary["summary"] += f"\nThis measure has an effective date of: {date_str}"
-
         input_data = base_name if base_name.startswith(("http://", "https://")) else base_name
-
         try:
             summary_data = {
                 "summary": summary["summary"],
@@ -332,26 +312,19 @@ class TextProcessor:
                 "base_name": base_name,
                 "input_data": input_data
             }
-            if file_url:  # Add file_url only for uploaded PDFs
+            if file_url:
                 summary_data["file_url"] = file_url
-
             summary_ref.document(summary_id).set(summary_data)
             logging.info(f"Saved new summary to Firestore with summary_id: {summary_id}, base_name: {base_name}, model: {self.model}")
         except Exception as e:
             logging.error(f"Failed to save summary to Firestore: {str(e)}")
             raise
-
-        return {"summary": summary["summary"], "input_data": input_data, "file_url": file_url}
+        return {"summary": summary["summary"], "input_data": input_data, "file_url": file_url, "summary_id": summary_id}
 
 async def process_input(input_data, model, custom_prompt, user_id, display_name, file_url=None, override_base_name=None):
-    """
-    Process input data (URL or uploaded file) and generate a summary.
-    If override_base_name is provided, that name will be used in Firestore.
-    """
     try:
         processor = TextProcessor(model=model)
         base_name = None
-
         if hasattr(input_data, "read"):
             base_name = input_data.name if hasattr(input_data, "name") else "uploaded_file"
             logging.info(f"Processing uploaded file: {base_name}")
@@ -372,17 +345,13 @@ async def process_input(input_data, model, custom_prompt, user_id, display_name,
             if result["error"]:
                 return {"error": result["error"], "model": model}
             clean_text = processor.preprocess_text(result["text"])
-            if override_base_name:
-                base_name = override_base_name
-            else:
-                base_name = processor.get_base_name_from_link(input_data)
+            base_name = override_base_name if override_base_name else processor.get_base_name_from_link(input_data)
             input_data_str = input_data
         else:
             return {"error": "Invalid input type. Expected URL, PDF, or HTML file.", "model": model}
-
         logging.debug(f"Calling generate_summary with base_name={base_name}, custom_prompt={custom_prompt[:50]}...")
         summary = processor.generate_summary(clean_text, base_name, custom_prompt, user_id, display_name, file_url=file_url)
-        return {"model": model, "summary": summary["summary"], "input_data": input_data_str, "file_url": file_url}
+        return {"model": model, "summary": summary["summary"], "input_data": input_data_str, "file_url": file_url, "summary_id": summary["summary_id"]}
     except ValueError as ve:
         logging.error(f"ValueError processing input: {str(ve)}")
         return {"error": f"ValueError: {str(ve)}", "model": model}
