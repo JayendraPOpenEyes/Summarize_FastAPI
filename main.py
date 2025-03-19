@@ -8,6 +8,8 @@ import os
 from io import BytesIO
 from dotenv import load_dotenv
 from datetime import timedelta
+from summary import process_input, db, TextProcessor
+
 
 # Load environment variables
 load_dotenv()
@@ -103,42 +105,48 @@ async def summarize_upload(
 ):
     """
     Summarize an uploaded PDF file.
-    Generates three summaries: GPT-4, GPT-4-mini, and TogetherAI.
+    Extracts the text only once, then generates three summaries (GPT-4, GPT-4-mini, and TogetherAI).
     Uses default guest values.
     """
     try:
-        user_id = "guest_user"
+        user_id = "guest"
         display_name = "Guest"
         file_content = await file.read()
+        # Create a BytesIO object so we can read it multiple times
         file_obj = BytesIO(file_content)
         file_obj.name = file.filename
-
-        result_gpt4 = await process_input(
-            input_data=file_obj,
-            model="gpt4",
-            custom_prompt=custom_prompt,
-            user_id=user_id,
-            display_name=display_name,
-            override_base_name=file.filename
-        )
-        file_obj.seek(0)
-        result_gpt4mini = await process_input(
-            input_data=file_obj,
-            model="openai",
-            custom_prompt=custom_prompt,
-            user_id=user_id,
-            display_name=display_name,
-            override_base_name=file.filename
-        )
-        file_obj.seek(0)
-        result_togetherai = await process_input(
-            input_data=file_obj,
-            model="togetherai",
-            custom_prompt=custom_prompt,
-            user_id=user_id,
-            display_name=display_name,
-            override_base_name=file.filename
-        )
+        
+        # Use one processor instance (e.g., with OpenAI API) to extract text.
+        # (It doesn't matter which model we use for extraction, since extraction code is common.)
+        extraction_processor = TextProcessor("openai")
+        base_name = file_obj.name
+        _, ext = os.path.splitext(base_name)
+        ext = ext.lower()
+        if ext == ".pdf":
+            extraction_result = extraction_processor.process_uploaded_pdf(file_obj, base_name=base_name)
+        elif ext in [".htm", ".html"]:
+            extraction_result = extraction_processor.process_uploaded_html(file_obj, base_name=base_name)
+        else:
+            return {"error": "Unsupported file type. Please upload a PDF or HTML file."}
+        
+        if extraction_result["error"]:
+            return {"error": extraction_result["error"]}
+        
+        clean_text = extraction_processor.preprocess_text(extraction_result["text"])
+        
+        # Now, using the same extracted text, generate summaries from all three models.
+        # For GPT-4:
+        processor_gpt4 = TextProcessor("gpt4")
+        result_gpt4 = processor_gpt4.generate_summary(clean_text, base_name, custom_prompt, user_id, display_name)
+        
+        # For GPT-4-mini:
+        processor_gpt4mini = TextProcessor("openai")
+        result_gpt4mini = processor_gpt4mini.generate_summary(clean_text, base_name, custom_prompt, user_id, display_name)
+        
+        # For TogetherAI:
+        processor_togetherai = TextProcessor("togetherai")
+        result_togetherai = processor_togetherai.generate_summary(clean_text, base_name, custom_prompt, user_id, display_name)
+        
         return {"gpt4": result_gpt4, "gpt4mini": result_gpt4mini, "togetherai": result_togetherai}
     except Exception as e:
         logging.error(f"Error in /summarize/upload: {e}")
