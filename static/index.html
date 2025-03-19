@@ -5,35 +5,48 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Bill Summarization</title>
   <style>
-    /* Modern, responsive CSS styling using grid for three columns */
-    body {
-      font-family: Arial, sans-serif;
-      background-color: #f4f4f4;
+    /* Reset some defaults for full width layout */
+    body, html {
       margin: 0;
       padding: 0;
+      width: 100%;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background-color: #f4f4f4;
+      color: #333;
     }
     .container {
       max-width: 1200px;
-      margin: 30px auto;
+      margin: 0 auto;
       padding: 20px;
       background-color: #fff;
-      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+      border-radius: 8px;
     }
     header {
       text-align: center;
-      padding-bottom: 20px;
+      padding: 20px 0;
     }
     header img {
       width: 100px;
       border-radius: 20px;
-      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
     }
     header h1 {
       margin: 10px 0;
+      font-size: 2rem;
+      color: #4CAF50;
+    }
+    header p {
+      font-size: 1rem;
+      color: #666;
     }
     form {
       display: flex;
       flex-direction: column;
+      gap: 15px;
+      padding: 20px;
+      background-color: #f9f9f9;
+      border-radius: 8px;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
     }
     .form-group {
       margin-bottom: 15px;
@@ -42,6 +55,7 @@
       font-weight: bold;
       margin-bottom: 5px;
       display: block;
+      color: #555;
     }
     input[type="text"],
     input[type="url"],
@@ -51,8 +65,9 @@
       width: 100%;
       padding: 10px;
       border: 1px solid #ccc;
-      border-radius: 5px;
+      border-radius: 4px;
       box-sizing: border-box;
+      font-size: 1rem;
     }
     textarea {
       resize: vertical;
@@ -61,11 +76,13 @@
     button.submit-btn {
       background-color: #4CAF50;
       color: white;
-      padding: 10px 16px;
+      padding: 8px 16px;
       border: none;
-      border-radius: 5px;
+      border-radius: 4px;
       cursor: pointer;
-      font-size: 16px;
+      font-size: 1rem;
+      width: 150px;
+      margin: 0 auto;
     }
     button.submit-btn:hover {
       background-color: #45a049;
@@ -75,16 +92,21 @@
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
       gap: 20px;
+      padding: 10px;
     }
     .result-box {
       background-color: #e6ffe6;
       padding: 15px;
-      border-radius: 5px;
+      border-radius: 8px;
       white-space: pre-wrap;
       position: relative;
+      text-align: justify;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
     }
     .result-box h3 {
       margin-top: 0;
+      text-align: left;
+      color: #4CAF50;
     }
     .copy-icon {
       position: absolute;
@@ -98,22 +120,45 @@
       margin-top: 10px;
       border-top: 1px solid #ccc;
       padding-top: 10px;
+      text-align: left;
+    }
+    .feedback-section .feedback-buttons {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 10px;
     }
     .feedback-section button {
-      padding: 5px 10px;
+      padding: 6px 12px;
       font-size: 14px;
-      margin-right: 5px;
+      border: none;
+      border-radius: 4px;
       cursor: pointer;
+      background-color: #f1f1f1;
     }
-    .feedback-section input.feedback-comment {
-      width: calc(100% - 120px);
-      padding: 5px;
+    .feedback-section button:hover {
+      background-color: #ddd;
+    }
+    .feedback-section textarea.feedback-comment {
+      width: 100%;
+      padding: 8px;
       font-size: 14px;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      resize: vertical;
+      min-height: 80px;
     }
     .feedback-section .feedback-submit-btn {
-      padding: 5px 10px;
-      font-size: 14px;
+      background-color: #4CAF50;
+      color: white;
+      padding: 8px 16px;
+      border: none;
+      border-radius: 4px;
       cursor: pointer;
+      font-size: 14px;
+      margin-top: 10px;
+    }
+    .feedback-section .feedback-submit-btn:hover {
+      background-color: #45a049;
     }
     .hidden {
       display: none;
@@ -124,9 +169,22 @@
       align-items: center;
     }
     .small-btn {
-      padding: 6px 10px;
+      padding: 4px 12px;
       font-size: 14px;
-      margin: 0;
+      background-color: #4CAF50;
+      color: white;
+      border: none;
+      border-radius: 2px;
+      cursor: pointer;
+    }
+    .small-btn:hover {
+      background-color: #45a049;
+    }
+    #loading {
+      text-align: center;
+      font-size: 1.2rem;
+      color: #4CAF50;
+      margin: 20px 0;
     }
   </style>
 </head>
@@ -270,9 +328,11 @@ using the exact date provided; otherwise, do not include any effective date stat
       const feedbackDiv = document.createElement('div');
       feedbackDiv.classList.add('feedback-section');
       feedbackDiv.innerHTML = `
-        <button class="feedback-btn" data-feedback="like">👍</button>
-        <button class="feedback-btn" data-feedback="dislike">👎</button>
-        <input type="text" placeholder="Add a comment (optional)" class="feedback-comment">
+        <div class="feedback-buttons">
+          <button class="feedback-btn" data-feedback="like">👍 Like</button>
+          <button class="feedback-btn" data-feedback="dislike">👎 Dislike</button>
+        </div>
+        <textarea placeholder="Add a comment (optional)" class="feedback-comment"></textarea>
         <button class="feedback-submit-btn">Submit Feedback</button>
       `;
       box.appendChild(feedbackDiv);
@@ -280,7 +340,7 @@ using the exact date provided; otherwise, do not include any effective date stat
       const feedbackButtons = feedbackDiv.querySelectorAll('.feedback-btn');
       feedbackButtons.forEach(btn => {
         btn.addEventListener('click', () => {
-          feedbackButtons.forEach(b => b.style.backgroundColor = '');
+          feedbackButtons.forEach(b => b.style.backgroundColor = '#f1f1f1');
           btn.style.backgroundColor = '#ddd';
           selectedFeedback = btn.getAttribute('data-feedback');
         });
@@ -370,7 +430,7 @@ using the exact date provided; otherwise, do not include any effective date stat
         titleGPT4.textContent = "GPT-4 Summary";
         boxGPT4.appendChild(titleGPT4);
         const copyIconGPT4 = document.createElement('img');
-        copyIconGPT4.src = "/static/copy-icon.jpg";
+        copyIconGPT4.src = "/static/copy-icon.png";
         copyIconGPT4.alt = "Copy";
         copyIconGPT4.classList.add('copy-icon');
         copyIconGPT4.addEventListener('click', function() {
@@ -390,7 +450,7 @@ using the exact date provided; otherwise, do not include any effective date stat
         titleGPT4mini.textContent = "GPT-4-mini Summary";
         boxGPT4mini.appendChild(titleGPT4mini);
         const copyIconGPT4mini = document.createElement('img');
-        copyIconGPT4mini.src = "/static/copy-icon.jpg";
+        copyIconGPT4mini.src = "/static/copy-icon.png";
         copyIconGPT4mini.alt = "Copy";
         copyIconGPT4mini.classList.add('copy-icon');
         copyIconGPT4mini.addEventListener('click', function() {
@@ -410,14 +470,14 @@ using the exact date provided; otherwise, do not include any effective date stat
         titleTogether.textContent = "TogetherAI Summary";
         boxTogether.appendChild(titleTogether);
         const copyIconTogether = document.createElement('img');
-        copyIconTogether.src = "/static/copy-icon.jpg";
+        copyIconTogether.src = "/static/copy-icon.png";
         copyIconTogether.alt = "Copy";
         copyIconTogether.classList.add('copy-icon');
         copyIconTogether.addEventListener('click', function() {
           copyText(resultData.togetherai.summary);
         });
         boxTogether.appendChild(copyIconTogether);
-        const contentTogether = document.createElement('p');
+        const contentTogether = document.createElement('p');  
         boxTogether.appendChild(contentTogether);
         resultContainer.appendChild(boxTogether);
         typewriterEffect(contentTogether, resultData.togetherai.summary);
