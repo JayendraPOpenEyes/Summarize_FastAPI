@@ -17,18 +17,18 @@
     .container {
       max-width: 1200px;
       margin: 0 auto;
-      padding: 20px;
+      padding: 10px; /* Reduced side padding */
       background-color: #fff;
       box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
       border-radius: 8px;
     }
     header {
       text-align: center;
-      padding: 20px 0;
+      padding: 10px 0;
     }
     header img {
-      width: 100px;
-      border-radius: 20px;
+      width: 200px; /* Increased logo size */
+      border-radius: 30px;
     }
     header h1 {
       margin: 10px 0;
@@ -87,6 +87,37 @@
     button.submit-btn:hover {
       background-color: #45a049;
     }
+    /* Progress Bar styles */
+    #progress-container {
+      width: 100%;
+      background-color: #ddd;
+      border-radius: 4px;
+      overflow: hidden;
+      margin: 10px auto;
+      height: 20px;
+      position: relative;
+    }
+    #progress-bar {
+      width: 0;
+      height: 100%;
+      background-color: #4CAF50;
+      transition: width 0.4s ease;
+    }
+    /* Progress text inside the progress bar */
+    #progress-text {
+      position: absolute;
+      width: 100%;
+      text-align: center;
+      line-height: 20px;
+      font-size: 0.9rem;
+      color: #fff;
+    }
+    /* Extra progress message below the progress bar */
+    #progress-extra {
+      text-align: center;
+      margin-top: 5px;
+      color: #555;
+    }
     .result {
       margin-top: 20px;
       display: grid;
@@ -116,18 +147,21 @@
       height: 20px;
       cursor: pointer;
     }
+    /* Feedback Section Styling */
     .feedback-section {
-      margin-top: 10px;
-      border-top: 1px solid #ccc;
-      padding-top: 10px;
-      text-align: left;
+      margin-top: 0; /* Remove extra gap */
+      padding-top: 0;
+      position: relative;
     }
-    .feedback-section .feedback-buttons {
+    /* Position like/dislike buttons in a flex container at top right */
+    .feedback-buttons {
+      position: absolute;
+      top: 5px;
+      right: 5px;
       display: flex;
-      gap: 10px;
-      margin-bottom: 10px;
+      gap: 5px;
     }
-    .feedback-section button {
+    .feedback-buttons button {
       padding: 6px 12px;
       font-size: 14px;
       border: none;
@@ -135,10 +169,13 @@
       cursor: pointer;
       background-color: #f1f1f1;
     }
-    .feedback-section button:hover {
+    .feedback-buttons button:hover {
       background-color: #ddd;
     }
+    /* Adjust textarea and submit button so they align to the left */
     .feedback-section textarea.feedback-comment {
+      display: block;
+      margin-top: 40px; /* Leaves room for the absolutely positioned buttons */
       width: 100%;
       padding: 8px;
       font-size: 14px;
@@ -146,8 +183,11 @@
       border-radius: 4px;
       resize: vertical;
       min-height: 80px;
+      box-sizing: border-box;
     }
     .feedback-section .feedback-submit-btn {
+      display: block;
+      margin-top: 5px;
       background-color: #4CAF50;
       color: white;
       padding: 8px 16px;
@@ -155,7 +195,7 @@
       border-radius: 4px;
       cursor: pointer;
       font-size: 14px;
-      margin-top: 10px;
+      text-align: left;
     }
     .feedback-section .feedback-submit-btn:hover {
       background-color: #45a049;
@@ -193,7 +233,7 @@
     <header>
       <img src="/static/logo.jpg" alt="Logo">
       <h1>Bill Summarization</h1>
-      <p>Enter a URL, upload a PDF, or choose a previously uploaded file to generate three summaries (GPT‑4, GPT‑4‑mini, and TogetherAI).</p>
+      <p>Enter a URL, upload a PDF, or choose a file to generate summaries.</p>
     </header>
     <form id="summarize-form">
       <div class="form-group">
@@ -228,6 +268,13 @@
       </div>
       <button type="submit" class="submit-btn">Summarize</button>
     </form>
+    <!-- Progress bar below the Summarize button -->
+    <div id="progress-container" class="hidden">
+      <div id="progress-bar"></div>
+      <div id="progress-text"></div>
+    </div>
+    <!-- Extra progress message if processing takes long -->
+    <div id="progress-extra" class="hidden"></div>
     <div id="loading" class="hidden">
       <p>Processing... Please wait.</p>
     </div>
@@ -278,7 +325,7 @@ using the exact date provided; otherwise, do not include any effective date stat
     // Fetch list of files from the API for guest user
     async function fetchFiles() {
       try {
-        const response = await fetch(`/list_files`);
+        const response = await fetch('/list_files');
         if (!response.ok) throw new Error('Could not fetch file list');
         const files = await response.json();
         chooseFileEl.innerHTML = "";
@@ -327,10 +374,11 @@ using the exact date provided; otherwise, do not include any effective date stat
     function addFeedbackControls(box, summary_id, modelLabel) {
       const feedbackDiv = document.createElement('div');
       feedbackDiv.classList.add('feedback-section');
+      // Feedback controls: like/dislike buttons (side by side) and comment area with submit button
       feedbackDiv.innerHTML = `
         <div class="feedback-buttons">
-          <button class="feedback-btn" data-feedback="like">👍 Like</button>
-          <button class="feedback-btn" data-feedback="dislike">👎 Dislike</button>
+          <button class="feedback-btn" data-feedback="like">👍</button>
+          <button class="feedback-btn" data-feedback="dislike">👎</button>
         </div>
         <textarea placeholder="Add a comment (optional)" class="feedback-comment"></textarea>
         <button class="feedback-submit-btn">Submit Feedback</button>
@@ -383,6 +431,32 @@ using the exact date provided; otherwise, do not include any effective date stat
       document.getElementById('loading').classList.remove('hidden');
       document.getElementById('result').innerHTML = '';
 
+      // Show and simulate the progress bar
+      const progressContainer = document.getElementById('progress-container');
+      const progressBar = document.getElementById('progress-bar');
+      const progressText = document.getElementById('progress-text');
+      const progressExtra = document.getElementById('progress-extra');
+      progressContainer.classList.remove('hidden');
+      progressBar.style.width = '0%';
+      progressText.textContent = '0%';
+      progressExtra.classList.add('hidden');
+      let progress = 0;
+      const startTime = Date.now();
+
+      const interval = setInterval(() => {
+        // Increase progress until 90%
+        if (progress < 90) {
+          progress += 10;
+          progressBar.style.width = progress + '%';
+          progressText.textContent = progress + '%';
+        }
+        // If more than 30 seconds have elapsed, show extra message
+        if (Date.now() - startTime > 30000) {
+          progressExtra.classList.remove('hidden');
+          progressExtra.textContent = `Processing is taking longer than usual. It might take 2–3 minutes. Current progress: ${progress}%`;
+        }
+      }, 500);
+
       try {
         let response;
         if (inputType === 'url') {
@@ -427,10 +501,10 @@ using the exact date provided; otherwise, do not include any effective date stat
         const boxGPT4 = document.createElement('div');
         boxGPT4.classList.add('result-box');
         const titleGPT4 = document.createElement('h3');
-        titleGPT4.textContent = "GPT-4 Summary";
+        titleGPT4.textContent = "Model 1";
         boxGPT4.appendChild(titleGPT4);
         const copyIconGPT4 = document.createElement('img');
-        copyIconGPT4.src = "/static/copy-icon.png";
+        copyIconGPT4.src = "/static/copy-icon.jpg";
         copyIconGPT4.alt = "Copy";
         copyIconGPT4.classList.add('copy-icon');
         copyIconGPT4.addEventListener('click', function() {
@@ -447,10 +521,10 @@ using the exact date provided; otherwise, do not include any effective date stat
         const boxGPT4mini = document.createElement('div');
         boxGPT4mini.classList.add('result-box');
         const titleGPT4mini = document.createElement('h3');
-        titleGPT4mini.textContent = "GPT-4-mini Summary";
+        titleGPT4mini.textContent = "Model 2  ";
         boxGPT4mini.appendChild(titleGPT4mini);
         const copyIconGPT4mini = document.createElement('img');
-        copyIconGPT4mini.src = "/static/copy-icon.png";
+        copyIconGPT4mini.src = "/static/copy-icon.jpg";
         copyIconGPT4mini.alt = "Copy";
         copyIconGPT4mini.classList.add('copy-icon');
         copyIconGPT4mini.addEventListener('click', function() {
@@ -467,10 +541,10 @@ using the exact date provided; otherwise, do not include any effective date stat
         const boxTogether = document.createElement('div');
         boxTogether.classList.add('result-box');
         const titleTogether = document.createElement('h3');
-        titleTogether.textContent = "TogetherAI Summary";
+        titleTogether.textContent = "Model 3";
         boxTogether.appendChild(titleTogether);
         const copyIconTogether = document.createElement('img');
-        copyIconTogether.src = "/static/copy-icon.png";
+        copyIconTogether.src = "/static/copy-icon.jpg";
         copyIconTogether.alt = "Copy";
         copyIconTogether.classList.add('copy-icon');
         copyIconTogether.addEventListener('click', function() {
@@ -485,6 +559,13 @@ using the exact date provided; otherwise, do not include any effective date stat
       } catch (error) {
         document.getElementById('result').innerHTML = '<p style="color:red;">' + error + '</p>';
       } finally {
+        clearInterval(interval);
+        progressBar.style.width = '100%';
+        progressText.textContent = '100%';
+        setTimeout(() => {
+          progressContainer.classList.add('hidden');
+          progressExtra.classList.add('hidden');
+        }, 500);
         document.getElementById('loading').classList.add('hidden');
       }
     });

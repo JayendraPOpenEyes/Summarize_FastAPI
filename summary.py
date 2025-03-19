@@ -51,7 +51,7 @@ class TextProcessor:
             if not self.openai_api_key or self.openai_api_key.strip() == "":
                 raise ValueError("OPENAI_API_KEY is missing or empty in .env file.")
             if model.lower() == "gpt4":
-                self.model = "gpt-4o"
+                self.model = "gpt-3.5-turbo"
             else:
                 self.model = "gpt-4o-mini"
             self.openai_client = openai.OpenAI(api_key=self.openai_api_key)
