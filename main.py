@@ -1,4 +1,3 @@
-# main.py
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException
 from fastapi.responses import HTMLResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -6,19 +5,30 @@ import uvicorn
 import logging
 import os
 from io import BytesIO
-from dotenv import load_dotenv
 from datetime import timedelta
-from summary import process_input, db, TextProcessor
+from dotenv import load_dotenv
 
+# Firebase Admin SDK imports
+import firebase_admin
+from firebase_admin import credentials, storage, firestore
+
+# Import your summarization functions and classes
+from summary import process_input, TextProcessor
 
 # Load environment variables
 load_dotenv()
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
-# Import the async process_input function and Firestore client from summary.py
-from summary import process_input, db
-from firebase_admin import storage, firestore
+# Initialize Firebase Admin SDK (ensure this only runs once)
+if not firebase_admin._apps:
+    cred = credentials.Certificate("path/to/your/serviceAccountKey.json")
+    firebase_admin.initialize_app(cred, {
+        "storageBucket": "your-project-id.appspot.com"
+    })
+
+# Firestore DB client for feedback updates.
+db = firestore.client()
 
 app = FastAPI(
     title="Bill Summarization API",
@@ -41,8 +51,8 @@ async def list_files():
     Returns a JSON object mapping file names to signed URLs.
     """
     try:
-        bucket = storage.bucket()  # Use the default Firebase bucket
-        prefix = "users/guest_user/"    # Default folder for guest user
+        bucket = storage.bucket()  # Using the default Firebase bucket
+        prefix = "users/guest_user/"  # Folder for guest user files
         blobs = bucket.list_blobs(prefix=prefix)
         files = {}
         for blob in blobs:
@@ -105,54 +115,79 @@ async def summarize_upload(
 ):
     """
     Summarize an uploaded PDF file.
-    Extracts the text only once, then generates three summaries (GPT-4, GPT-4-mini, and TogetherAI).
-    Uses default guest values.
+    Uploads the file to Firebase Storage with duplicate naming logic and generates three summaries.
     """
     try:
-        user_id = "guest"
+        # Use a consistent user_id for storage and listing.
+        user_id = "guest_user"
         display_name = "Guest"
+
+        # Read the file content.
         file_content = await file.read()
-        # Create a BytesIO object so we can read it multiple times
         file_obj = BytesIO(file_content)
         file_obj.name = file.filename
+
+        # Upload the file to Firebase Storage with duplicate name check.
+        bucket = storage.bucket()  # Firebase bucket initialized via firebase_admin
+        original_filename = file.filename  # e.g., "xyz.pdf"
+        base_name, ext = os.path.splitext(original_filename)
         
-        # Use one processor instance (e.g., with OpenAI API) to extract text.
-        # (It doesn't matter which model we use for extraction, since extraction code is common.)
+        # Start with the original file name.
+        new_filename = original_filename
+        counter = 1
+        blob_path = f"users/{user_id}/{new_filename}"
+        
+        # Loop until a file with the new_filename does not exist.
+        while bucket.blob(blob_path).exists():
+            new_filename = f"{base_name}({counter}){ext}"
+            blob_path = f"users/{user_id}/{new_filename}"
+            counter += 1
+
+        blob = bucket.blob(blob_path)
+        blob.upload_from_string(file_content, content_type=file.content_type)
+        # Optionally, generate a signed URL for accessing the uploaded file.
+        file_url = blob.generate_signed_url(expiration=timedelta(hours=1))
+
+        # Process the file for summarization.
         extraction_processor = TextProcessor("openai")
-        base_name = file_obj.name
-        _, ext = os.path.splitext(base_name)
+        base_name_used = file_obj.name  # original filename for summarization processing
+        _, ext = os.path.splitext(base_name_used)
         ext = ext.lower()
         if ext == ".pdf":
-            extraction_result = extraction_processor.process_uploaded_pdf(file_obj, base_name=base_name)
+            extraction_result = extraction_processor.process_uploaded_pdf(file_obj, base_name=base_name_used)
         elif ext in [".htm", ".html"]:
-            extraction_result = extraction_processor.process_uploaded_html(file_obj, base_name=base_name)
+            extraction_result = extraction_processor.process_uploaded_html(file_obj, base_name=base_name_used)
         else:
             return {"error": "Unsupported file type. Please upload a PDF or HTML file."}
-        
-        if extraction_result["error"]:
+
+        if extraction_result.get("error"):
             return {"error": extraction_result["error"]}
-        
+
         clean_text = extraction_processor.preprocess_text(extraction_result["text"])
-        
-        # Now, using the same extracted text, generate summaries from all three models.
-        # For GPT-4:
+
+        # Generate summaries using different processors.
         processor_gpt4 = TextProcessor("gpt4")
-        result_gpt4 = processor_gpt4.generate_summary(clean_text, base_name, custom_prompt, user_id, display_name)
-        
-        # For GPT-4-mini:
+        result_gpt4 = processor_gpt4.generate_summary(clean_text, base_name_used, custom_prompt, user_id, display_name)
+
         processor_gpt4mini = TextProcessor("openai")
-        result_gpt4mini = processor_gpt4mini.generate_summary(clean_text, base_name, custom_prompt, user_id, display_name)
-        
-        # For TogetherAI:
+        result_gpt4mini = processor_gpt4mini.generate_summary(clean_text, base_name_used, custom_prompt, user_id, display_name)
+
         processor_togetherai = TextProcessor("togetherai")
-        result_togetherai = processor_togetherai.generate_summary(clean_text, base_name, custom_prompt, user_id, display_name)
-        
-        return {"gpt4": result_gpt4, "gpt4mini": result_gpt4mini, "togetherai": result_togetherai}
+        result_togetherai = processor_togetherai.generate_summary(clean_text, base_name_used, custom_prompt, user_id, display_name)
+
+        return {
+            "status": "success",
+            "file_url": file_url,
+            "uploaded_filename": new_filename,
+            "gpt4": result_gpt4,
+            "gpt4mini": result_gpt4mini,
+            "togetherai": result_togetherai
+        }
+
     except Exception as e:
         logging.error(f"Error in /summarize/upload: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-# Updated feedback endpoint: update the summary document in the user's summaries subcollection
 @app.post("/feedback")
 async def feedback(
     summary_id: str = Form(...),
@@ -161,10 +196,9 @@ async def feedback(
 ):
     """
     Update the summary document with feedback (like/dislike and an optional comment).
-    The summary document is updated in the "users/guest/summaries" subcollection.
+    The summary document is updated in the "users/guest_user/summaries" subcollection.
     """
     try:
-        # We assume the summary belongs to the guest user.
         summary_ref = db.collection("users").document("guest_user").collection("summaries").document(summary_id)
         update_data = {
             "feedback": feedback,
