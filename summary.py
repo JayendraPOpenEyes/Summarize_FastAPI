@@ -294,14 +294,14 @@ class TextProcessor:
             raise e
         except Exception as e:
             raise ValueError(f"Unexpected error during summary generation: {str(e)}")
-        if "Error" not in summary["summary"]:
-            effective_date_pattern = r"(effective\s+(?:date\s*(?:is|of|:)?|on)|takes\s+effect\s+(?:on)?)\s*[:\s]*(?:(January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2}(?:st|nd|rd|th)?[,\s]+\d{4}|\d{1,2}(?:st|nd|rd|th)?\s+(January|February|March|April|May|June|July|August|September|October|November|December)[,\s]+\d{4}|\d{4}-\d{2}-\d{2}|\d{2}/\d{2}/\d{4})"
-            match = re.search(effective_date_pattern, text, re.IGNORECASE)
-            if match:
-                date_str = (match.group(0).split(":", 1)[-1].strip() if ":" in match.group(0)
-                            else match.group(0).split("on", 1)[-1].strip() if "on" in match.group(0)
-                            else match.group(0).split("effect", 1)[-1].strip())
-                summary["summary"] += f"\nThis measure has an effective date of: {date_str}"
+        # #if "Error" not in summary["summary"]:
+        #     effective_date_pattern = r"(effective\s+(?:date\s*(?:is|of|:)?|on)|takes\s+effect\s+(?:on)?)\s*[:\s]*(?:(January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2}(?:st|nd|rd|th)?[,\s]+\d{4}|\d{1,2}(?:st|nd|rd|th)?\s+(January|February|March|April|May|June|July|August|September|October|November|December)[,\s]+\d{4}|\d{4}-\d{2}-\d{2}|\d{2}/\d{2}/\d{4})"
+        #     match = re.search(effective_date_pattern, text, re.IGNORECASE)
+        #     if match:
+        #         date_str = (match.group(0).split(":", 1)[-1].strip() if ":" in match.group(0)
+        #                     else match.group(0).split("on", 1)[-1].strip() if "on" in match.group(0)
+        #                     else match.group(0).split("effect", 1)[-1].strip())
+        #         summary["summary"] += f"\nThis measure has an effective date of: {date_str}"
         input_data = base_name if base_name.startswith(("http://", "https://")) else base_name
         try:
             summary_data = {

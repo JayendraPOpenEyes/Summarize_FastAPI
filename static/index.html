@@ -286,13 +286,12 @@
   <script>
     // Sample Prompt functionality
     const samplePromptText = `Summarize the provided legislative document, focusing only on new provisions introduced by this bill.
-Start each summary with 'This measure...'.
+Start summary with 'This measure...'.
 The summary must be at least one paragraph long (minimum 4-6 sentences) and no longer than a full page,
 detailing key changes such as definitions, rules, or exemptions, without including opinions, current laws,
 or repetitive statements.
 Do not add a title, introduction, or conclusion (e.g., 'in summary'); the entire text should be the summary.
-If the document specifies an effective date, end the summary with 'This measure has an effective date of: [date]',
-using the exact date provided; otherwise, do not include any effective date statement.`;
+Mention effective date if it is there inside the document at the end.`;
 
     document.getElementById('samplePromptButton').addEventListener('click', function() {
       document.getElementById('customPrompt').value = samplePromptText;
