@@ -28,19 +28,6 @@ jobs:
       run: |
         gcloud auth configure-docker us-central1-docker.pkg.dev
 
-    - name: Ensure Artifact Registry Repository Exists
-      run: |
-        set -e
-        if ! gcloud artifacts repositories describe gcptest --location=us-central1; then
-          echo "Repository not found. Creating repository gcptest..."
-          gcloud artifacts repositories create gcptest \
-            --repository-format=docker \
-            --location=us-central1 \
-            --description="Repository for gcptest images"
-        else
-          echo "Repository gcptest already exists."
-        fi
-
     - name: Build Docker image
       run: |
         docker build -t us-central1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/gcptest/gcptest:latest .
