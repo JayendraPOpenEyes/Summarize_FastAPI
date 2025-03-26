@@ -30,16 +30,16 @@ jobs:
 
     - name: Build Docker image
       run: |
-        docker build -t us-central1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/my-docker-repo/my-app:latest .
+        docker build -t us-central1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/gcptest/my-app:latest .
 
     - name: Push Docker image
       run: |
-        docker push us-central1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/my-docker-repo/my-app:latest
+        docker push us-central1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/gcptest/my-app:latest
 
     - name: Deploy to Cloud Run
       run: |
         gcloud run deploy my-app \
-          --image=us-central1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/my-docker-repo/my-app:latest \
+          --image=us-central1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/gcp test/my-app:latest \
           --platform=managed \
           --region=us-central1 \
           --allow-unauthenticated
