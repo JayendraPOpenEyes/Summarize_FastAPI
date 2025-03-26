@@ -44,4 +44,5 @@ jobs:
           --region=us-central1 \
           --allow-unauthenticated
           --service-account=firebase-adminsdk-h65me@${{ secrets.GCP_PROJECT_ID }}.iam.gserviceaccount.com
+          --timeout=300s
           
