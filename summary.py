@@ -4,6 +4,7 @@ import io
 import json
 import time
 import logging
+import fitz
 import asyncio
 import aiohttp
 from concurrent.futures import ThreadPoolExecutor
@@ -14,7 +15,6 @@ from bs4 import BeautifulSoup
 from PIL import Image
 from pdf2image import convert_from_bytes
 import pytesseract
-import fitz
 import openai
 import firebase_admin
 from firebase_admin import credentials, firestore, storage

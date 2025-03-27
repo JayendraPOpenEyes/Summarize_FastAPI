@@ -19,7 +19,7 @@ RUN pip install -r requirements.txt
 
 # Copy the entire project into the container,
 # including your source files, index.html, .env, and Firebase JSON file.
-COPY . /app
+ADD . /app
 
 # Expose the port that the app runs on
 EXPOSE 8080
