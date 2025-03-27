@@ -45,5 +45,5 @@ jobs:
           --allow-unauthenticated \
           --service-account=firebase-adminsdk-h65me@${{ secrets.GCP_PROJECT_ID }}.iam.gserviceaccount.com \
           --timeout=800s \ 
-          --set-env-vars PORT=8080 \
+          --set-env-vars PORT=8000 \
           
