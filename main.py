@@ -22,7 +22,7 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(
 
 # Initialize Firebase Admin SDK (ensure this only runs once)
 if not firebase_admin._apps:
-    cred = credentials.Certificate("path/to/your/serviceAccountKey.json")
+    cred = credentials.Certificate("firebase-adminsdk.json")
     firebase_admin.initialize_app(cred, {
         "storageBucket": "your-project-id.appspot.com"
     })
