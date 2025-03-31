@@ -14,8 +14,9 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Create Firebase credentials file
-        run: echo "${{ secrets.FIREBASE_CREDENTIALS }}" > firebase-adminsdk.json
-
+        run: |
+          printf '%s' "${{ secrets.FIREBASE_CREDENTIALS }}" > firebase-adminsdk.json
+      
       - name: Authenticate to Google Cloud
         uses: google-github-actions/auth@v2
         with:
