@@ -4,7 +4,6 @@ from fastapi.staticfiles import StaticFiles
 import uvicorn
 import logging
 import os
-import json
 from io import BytesIO
 from datetime import timedelta
 from dotenv import load_dotenv
@@ -21,40 +20,12 @@ load_dotenv()
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
-def initialize_firebase():
-    """Initialize Firebase Admin SDK with environment variable configuration"""
-    if not firebase_admin._apps:
-        try:
-            firebase_config = os.getenv('FIREBASE_CONFIG')
-            if not firebase_config:
-                raise ValueError("FIREBASE_CONFIG environment variable not set")
-            
-            # Parse JSON from environment variable
-            cred_dict = json.loads(firebase_config)
-            cred = credentials.Certificate(cred_dict)
-            
-            storage_bucket = os.getenv("FIREBASE_STORAGE_BUCKET", "your-project-id.appspot.com")
-            
-            firebase_admin.initialize_app(cred, {
-                "storageBucket": storage_bucket
-            })
-            logging.info("Firebase initialized successfully")
-            
-        except json.JSONDecodeError as e:
-            logging.error(f"Invalid Firebase configuration: {str(e)}")
-            raise HTTPException(
-                status_code=500,
-                detail="Invalid Firebase configuration - check server logs"
-            )
-        except Exception as e:
-            logging.error(f"Error initializing Firebase: {str(e)}")
-            raise HTTPException(
-                status_code=500,
-                detail="Firebase initialization failed - check server logs"
-            )
-
-# Initialize Firebase
-initialize_firebase()
+# Initialize Firebase Admin SDK (ensure this only runs once)
+if not firebase_admin._apps:
+    cred = credentials.Certificate("firebase-adminsdk.json")
+    firebase_admin.initialize_app(cred, {
+        "storageBucket": "your-project-id.appspot.com"
+    })
 
 # Firestore DB client for feedback updates.
 db = firestore.client()
@@ -80,8 +51,8 @@ async def list_files():
     Returns a JSON object mapping file names to signed URLs.
     """
     try:
-        bucket = storage.bucket()
-        prefix = "users/guest_user/"
+        bucket = storage.bucket()  # Using the default Firebase bucket
+        prefix = "users/guest_user/"  # Folder for guest user files
         blobs = bucket.list_blobs(prefix=prefix)
         files = {}
         for blob in blobs:
@@ -91,7 +62,7 @@ async def list_files():
                 files[file_name] = file_url
         return files
     except Exception as e:
-        logging.error(f"Error listing files: {str(e)}")
+        logging.error(f"Error listing files: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/summarize/url")
@@ -118,7 +89,7 @@ async def summarize_url(
         )
         result_gpt4mini = await process_input(
             input_data=url,
-            model="openai",
+            model="openai",  # GPT-4-mini option
             custom_prompt=custom_prompt,
             user_id=user_id,
             display_name=display_name,
@@ -134,7 +105,7 @@ async def summarize_url(
         )
         return {"gpt4": result_gpt4, "gpt4mini": result_gpt4mini, "togetherai": result_togetherai}
     except Exception as e:
-        logging.error(f"Error in /summarize/url: {str(e)}")
+        logging.error(f"Error in /summarize/url: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/summarize/upload")
@@ -147,21 +118,26 @@ async def summarize_upload(
     Uploads the file to Firebase Storage with duplicate naming logic and generates three summaries.
     """
     try:
+        # Use a consistent user_id for storage and listing.
         user_id = "guest_user"
         display_name = "Guest"
 
+        # Read the file content.
         file_content = await file.read()
         file_obj = BytesIO(file_content)
         file_obj.name = file.filename
 
-        bucket = storage.bucket()
-        original_filename = file.filename
+        # Upload the file to Firebase Storage with duplicate name check.
+        bucket = storage.bucket()  # Firebase bucket initialized via firebase_admin
+        original_filename = file.filename  # e.g., "xyz.pdf"
         base_name, ext = os.path.splitext(original_filename)
         
+        # Start with the original file name.
         new_filename = original_filename
         counter = 1
         blob_path = f"users/{user_id}/{new_filename}"
         
+        # Loop until a file with the new_filename does not exist.
         while bucket.blob(blob_path).exists():
             new_filename = f"{base_name}({counter}){ext}"
             blob_path = f"users/{user_id}/{new_filename}"
@@ -169,13 +145,14 @@ async def summarize_upload(
 
         blob = bucket.blob(blob_path)
         blob.upload_from_string(file_content, content_type=file.content_type)
+        # Optionally, generate a signed URL for accessing the uploaded file.
         file_url = blob.generate_signed_url(expiration=timedelta(hours=1))
 
+        # Process the file for summarization.
         extraction_processor = TextProcessor("openai")
-        base_name_used = file_obj.name
+        base_name_used = file_obj.name  # original filename for summarization processing
         _, ext = os.path.splitext(base_name_used)
         ext = ext.lower()
-        
         if ext == ".pdf":
             extraction_result = extraction_processor.process_uploaded_pdf(file_obj, base_name=base_name_used)
         elif ext in [".htm", ".html"]:
@@ -188,6 +165,7 @@ async def summarize_upload(
 
         clean_text = extraction_processor.preprocess_text(extraction_result["text"])
 
+        # Generate summaries using different processors.
         processor_gpt4 = TextProcessor("gpt4")
         result_gpt4 = processor_gpt4.generate_summary(clean_text, base_name_used, custom_prompt, user_id, display_name)
 
@@ -207,17 +185,18 @@ async def summarize_upload(
         }
 
     except Exception as e:
-        logging.error(f"Error in /summarize/upload: {str(e)}")
+        logging.error(f"Error in /summarize/upload: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/feedback")
 async def feedback(
     summary_id: str = Form(...),
-    feedback: str = Form(...),
+    feedback: str = Form(...),  # "like" or "dislike"
     comment: str = Form(None)
 ):
     """
     Update the summary document with feedback (like/dislike and an optional comment).
+    The summary document is updated in the "users/guest_user/summaries" subcollection.
     """
     try:
         summary_ref = db.collection("users").document("guest_user").collection("summaries").document(summary_id)
@@ -230,7 +209,7 @@ async def feedback(
         logging.info(f"Feedback updated for summary {summary_id}")
         return {"status": "success", "summary_id": summary_id}
     except Exception as e:
-        logging.error(f"Error updating feedback: {str(e)}")
+        logging.error(f"Error updating feedback: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":
