@@ -3,7 +3,7 @@ name: Deploy to GCP Cloud Run
 on:
   push:
     branches:
-      - main  # Trigger on pushes to main branch
+      - main
 
 jobs:
   deploy:
@@ -14,9 +14,12 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Decode and Save Firebase Credentials
-        run: echo "${{ secrets.FIREBASE_CREDENTIALS }}" | base64 --decode > /tmp/firebase.json
-      
-      
+        run: |
+          echo "${{ secrets.FIREBASE_CREDENTIALS }}" > /tmp/firebase.json.b64
+          base64 -d /tmp/firebase.json.b64 > /tmp/firebase.json
+          # Also copy to the working directory for Docker build
+          cp /tmp/firebase.json ./firebase-adminsdk.json
+
       - name: Authenticate to Google Cloud
         uses: google-github-actions/auth@v2
         with:
@@ -47,4 +50,5 @@ jobs:
             --region=us-central1 \
             --allow-unauthenticated \
             --service-account=firebase-adminsdk-h65me@${{ secrets.GCP_PROJECT_ID }}.iam.gserviceaccount.com \
-            --timeout=800s
+            --timeout=800s \
+            --set-env-vars="FIREBASE_CREDENTIALS=${{ secrets.FIREBASE_CREDENTIALS }}"

@@ -32,10 +32,19 @@ else:
     raise ValueError("Firebase credentials are missing!")
 
 # Initialize Firebase Admin SDK (ensure this only runs once)
+# Firebase Admin SDK initialization
 if not firebase_admin._apps:
-    cred = credentials.Certificate("/tmp/firebase.json")
+    # Get Firebase credentials from environment variable
+    firebase_credentials_base64 = os.getenv("FIREBASE_CREDENTIALS")
+    if not firebase_credentials_base64:
+        raise ValueError("Firebase credentials are missing in environment variables!")
+    
+    # Decode and create credentials object directly
+    firebase_credentials_json = base64.b64decode(firebase_credentials_base64).decode("utf-8")
+    cred = credentials.Certificate(json.loads(firebase_credentials_json))
+    
     firebase_admin.initialize_app(cred, {
-        "storageBucket": "your-project-id.appspot.com"
+        "storageBucket": f"{os.getenv('GCP_PROJECT_ID')}.appspot.com"
     })
 
 # Firestore DB client for feedback updates.
