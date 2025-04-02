@@ -36,12 +36,12 @@ jobs:
 
       - name: Deploy to Cloud Run
         run: |
-          gcloud run deploy my-app \
-            --image=us-central1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/gcptest/gcptest:latest \
-            --platform=managed \
-            --region=us-central1 \
-            --allow-unauthenticated \
-            --service-account=firebase-adminsdk-h65me@${{ secrets.GCP_PROJECT_ID }}.iam.gserviceaccount.com \
-            --timeout=800s \
-            --set-env-vars="FIREBASE_CONFIG=${{ secrets.FIREBASE_CREDENTIALS}}" \
-            --set-env-vars="FIREBASE_STORAGE_BUCKET=your-project-id.appspot.com"
+            gcloud run deploy my-app \
+              --image=us-central1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/gcptest/gcptest:latest \
+              --platform=managed \
+              --region=us-central1 \
+              --allow-unauthenticated \
+              --service-account=firebase-adminsdk-h65me@${{ secrets.GCP_PROJECT_ID }}.iam.gserviceaccount.com \
+              --timeout=800s \
+              --set-env-vars="FIREBASE_CONFIG=${{ secrets.FIREBASE_CREDENTIALS }}" \
+              --set-env-vars="FIREBASE_STORAGE_BUCKET=your-project-id.appspot.com"
