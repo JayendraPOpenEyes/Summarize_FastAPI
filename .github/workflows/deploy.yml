@@ -51,4 +51,4 @@ jobs:
             --allow-unauthenticated \
             --service-account=firebase-adminsdk-h65me@${{ secrets.GCP_PROJECT_ID }}.iam.gserviceaccount.com \
             --timeout=800s \
-            --set-env-vars="FIREBASE_CREDENTIALS=${{ secrets.FIREBASE_CREDENTIALS }}"
+            --update-secrets="firebase-credentials=FIREBASE_CREDENTIALS:latest,openai-key=OPENAI_API_KEY:latest,together-key=TOGETHER_API_KEY:latest"
