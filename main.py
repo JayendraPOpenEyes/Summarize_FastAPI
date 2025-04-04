@@ -55,12 +55,19 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 async def read_index():
     return FileResponse("static/index.html")
 
+from google.cloud import storage
+
 @app.get("/list_files")
 async def list_files():
-    directory = "static/uploads"
-    if not os.path.exists(directory):
-        return {"files": []}
-    return {"files": os.listdir(directory)}
+    try:
+        bucket = storage.Client().bucket("project-astra-438804.appspot.com")
+        blobs = bucket.list_blobs(prefix="users/guest_user/")  # Adjust prefix as needed
+        
+        files = [blob.name.split("/")[-1] for blob in blobs if blob.name.endswith(".pdf")]
+        return {"files": files}
+    except Exception as e:
+        logging.error(f"Error fetching files from Firebase Storage: {e}")
+        raise HTTPException(status_code=500, detail="Failed to retrieve files")
 
 @app.post("/summarize/url")
 async def summarize_url(request: Request):
