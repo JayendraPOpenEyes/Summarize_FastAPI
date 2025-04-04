@@ -36,7 +36,7 @@ with open("/tmp/firebase.json", "w") as f:
 if not firebase_admin._apps:
     cred = credentials.Certificate(json.loads(firebase_json))
     firebase_admin.initialize_app(cred, {
-        "storageBucket": f"{os.getenv('GCP_PROJECT_ID')}.appspot.com"
+        "storageBucket": 'project-astra-438804.appspot.com'
     })
 
 # Firestore client
