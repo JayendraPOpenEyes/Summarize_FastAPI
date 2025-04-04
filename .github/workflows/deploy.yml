@@ -17,7 +17,6 @@ jobs:
         run: |
           echo "${{ secrets.FIREBASE_CREDENTIALS }}" > /tmp/firebase.json.b64
           base64 -d /tmp/firebase.json.b64 > /tmp/firebase.json
-          # Also copy to the working directory for Docker build
           cp /tmp/firebase.json ./firebase-adminsdk.json
 
       - name: Authenticate to Google Cloud
@@ -51,4 +50,5 @@ jobs:
             --allow-unauthenticated \
             --service-account=firebase-adminsdk-h65me@${{ secrets.GCP_PROJECT_ID }}.iam.gserviceaccount.com \
             --timeout=800s \
-            --set-env-vars="FIREBASE_CREDENTIALS=${{ secrets.FIREBASE_CREDENTIALS }}"
+            --set-env-vars="FIREBASE_CREDENTIALS=${{ secrets.FIREBASE_CREDENTIALS }}" \
+            --clear-secrets  # 👈 this is the fix
