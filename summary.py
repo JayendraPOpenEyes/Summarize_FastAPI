@@ -24,15 +24,33 @@ from dotenv import load_dotenv
 load_dotenv()
 logging.basicConfig(level=logging.DEBUG, format="%(asctime)s - %(levelname)s - %(message)s")
 
+# Firebase initialization block
 if not firebase_admin._apps:
     try:
         firebase_cred_path = "firebase-adminsdk.json"
-        if not os.path.exists(firebase_cred_path):
-            raise FileNotFoundError("firebase-adminsdk.json not found in the project directory.")
-        with open(firebase_cred_path, 'r') as f:
-            creds = json.load(f)
-        cred = credentials.Certificate(firebase_cred_path)
-        bucket_name = f"{creds['project_id']}.appspot.com"
+        creds_data = None
+
+        # First, try to load credentials from the local file.
+        if os.path.exists(firebase_cred_path):
+            logging.debug(f"Found {firebase_cred_path} locally. Loading credentials from file.")
+            with open(firebase_cred_path, 'r') as f:
+                creds_data = json.load(f)
+        else:
+            # Fallback: Try to load credentials from environment variable.
+            logging.debug("Local firebase-adminsdk.json not found. Checking environment variable.")
+            firebase_creds_env = os.environ.get("FIREBASE_CREDENTIALS")
+            if firebase_creds_env:
+                logging.debug("Firebase credentials found in environment variable. Loading credentials from env.")
+                creds_data = json.loads(firebase_creds_env)
+                # Optionally write the credentials to a file if you need the file for further use.
+                with open(firebase_cred_path, 'w') as f:
+                    json.dump(creds_data, f)
+            else:
+                raise FileNotFoundError("Firebase credentials not found. Provide them via file or environment variable.")
+
+        # Initialize Firebase with the credentials dictionary.
+        cred = credentials.Certificate(creds_data)
+        bucket_name = f"{creds_data['project_id']}.appspot.com"
         logging.debug(f"Constructed bucket name: {bucket_name}")
         firebase_admin.initialize_app(cred, {'storageBucket': bucket_name})
         logging.info(f"Firebase initialized with storage bucket: {bucket_name}")
@@ -40,6 +58,7 @@ if not firebase_admin._apps:
         logging.error(f"Failed to initialize Firebase: {str(e)}")
         raise
 
+# Firestore client initialization (if needed)
 db = firestore.client(database_id="statside-summary")
 
 class TextProcessor:
