@@ -5,6 +5,12 @@ on:
     branches:
       - main
 
+env:
+  PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+  REGION: us-central1
+  SERVICE_NAME: my-app
+  IMAGE_NAME: us-central1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/gcptest/gcptest:latest
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
@@ -12,6 +18,16 @@ jobs:
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
 
       - name: Decode and Save Firebase Credentials
         run: |
@@ -26,29 +42,35 @@ jobs:
 
       - name: Set up Google Cloud SDK
         uses: google-github-actions/setup-gcloud@v2
-        with:
-          project_id: ${{ secrets.GCP_PROJECT_ID }}
 
-      - name: Configure Docker authentication for Artifact Registry
+      - name: Configure Docker
         run: |
-          gcloud auth configure-docker us-central1-docker.pkg.dev
+          gcloud auth configure-docker ${{ env.REGION }}-docker.pkg.dev
 
       - name: Build Docker image
         run: |
-          docker build -t us-central1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/gcptest/gcptest:latest .
+          docker build -t ${{ env.IMAGE_NAME }} .
 
       - name: Push Docker image
         run: |
-          docker push us-central1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/gcptest/gcptest:latest
+          docker push ${{ env.IMAGE_NAME }}
 
       - name: Deploy to Cloud Run
         run: |
-          gcloud run deploy my-app \
-            --image=us-central1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/gcptest/gcptest:latest \
+          gcloud run deploy ${{ env.SERVICE_NAME }} \
+            --image=${{ env.IMAGE_NAME }} \
             --platform=managed \
-            --region=us-central1 \
+            --region=${{ env.REGION }} \
             --allow-unauthenticated \
-            --service-account=firebase-adminsdk-h65me@${{ secrets.GCP_PROJECT_ID }}.iam.gserviceaccount.com \
+            --service-account=firebase-adminsdk-h65me@${{ env.PROJECT_ID }}.iam.gserviceaccount.com \
             --timeout=800s \
             --set-env-vars="FIREBASE_CREDENTIALS=${{ secrets.FIREBASE_CREDENTIALS }}" \
-            --clear-secrets  # 👈 this is the fix
+            --set-env-vars="GOOGLE_CLOUD_PROJECT=${{ env.PROJECT_ID }}" \
+            --set-env-vars="GCLOUD_PROJECT=${{ env.PROJECT_ID }}" \
+            --clear-secrets
+
+      - name: Verify Deployment
+        run: |
+          gcloud run services describe ${{ env.SERVICE_NAME }} \
+            --region ${{ env.REGION }} \
+            --format="value(status.url)"
