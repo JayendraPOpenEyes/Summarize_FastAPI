@@ -57,17 +57,16 @@ jobs:
 
       - name: Deploy to Cloud Run
         run: |
-          gcloud run deploy ${{ env.SERVICE_NAME }} \
-            --image=${{ env.IMAGE_NAME }} \
-            --platform=managed \
-            --region=${{ env.REGION }} \
-            --allow-unauthenticated \
-            --service-account=firebase-adminsdk-h65me@${{ env.PROJECT_ID }}.iam.gserviceaccount.com \
-            --timeout=800s \
-            --set-env-vars="FIREBASE_CREDENTIALS=${{ secrets.FIREBASE_CREDENTIALS }}" \
-            --set-env-vars="GOOGLE_CLOUD_PROJECT=${{ env.PROJECT_ID }}" \
-            --set-env-vars="GCLOUD_PROJECT=${{ env.PROJECT_ID }}" \
-            --clear-secrets
+          gcloud run deploy my-app \
+          --image=us-central1-docker.pkg.dev/${{ env.PROJECT_ID }}/gcptest/gcptest:latest \
+          --platform=managed \
+          --region=${{ env.REGION }} \
+          --allow-unauthenticated \
+          --service-account=firebase-adminsdk-h65me@${{ env.PROJECT_ID }}.iam.gserviceaccount.com \
+          --timeout=800s \
+          --set-env-vars="FIREBASE_CREDENTIALS=${{ secrets.FIREBASE_CREDENTIALS }}" \
+          --set-env-vars="OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}" \
+          --set-env-vars="GOOGLE_CLOUD_PROJECT=${{ env.PROJECT_ID }}"
 
       - name: Verify Deployment
         run: |
