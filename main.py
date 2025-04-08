@@ -6,7 +6,6 @@ import logging
 import os
 import json
 import base64
-from io import BytesIO
 from datetime import timedelta
 
 # Firebase Admin SDK
@@ -14,7 +13,7 @@ import firebase_admin
 from firebase_admin import credentials, storage, firestore
 
 # Your summarization logic
-from summary import process_input, TextProcessor
+from summary import process_input
 
 # Logging setup
 logging.basicConfig(
@@ -31,7 +30,7 @@ together_api_key = os.getenv("TOGETHER_API_KEY")
 if not firebase_credentials_b64:
     raise ValueError("Firebase credentials are missing from environment variables!")
 
-# Decode Firebase credentials
+# Initialize Firebase
 try:
     firebase_json = base64.b64decode(firebase_credentials_b64).decode("utf-8")
     firebase_json_data = json.loads(firebase_json)
@@ -40,13 +39,12 @@ try:
     with open("/tmp/firebase.json", "w") as f:
         json.dump(firebase_json_data, f)
     
-    # Firebase Admin initialization
     if not firebase_admin._apps:
         cred = credentials.Certificate(firebase_json_data)
         firebase_admin.initialize_app(cred, {
             "storageBucket": f"{firebase_json_data.get('project_id')}.appspot.com"
         })
-        logging.info("Firebase Admin SDK initialized successfully")
+        logging.info("Firebase initialized successfully")
 except Exception as e:
     logging.error(f"Failed to initialize Firebase: {str(e)}")
     raise
@@ -57,7 +55,7 @@ db = firestore.client()
 # FastAPI setup
 app = FastAPI(
     title="Bill Summarization API",
-    description="An API to generate bill summaries using GPT-4, GPT-4-mini, and TogetherAI models.",
+    description="An API to generate bill summaries using GPT models.",
     version="1.0.0"
 )
 
@@ -73,6 +71,9 @@ async def list_files():
         bucket = storage.bucket()
         blobs = bucket.list_blobs(prefix="users/guest_user/")
         
+        if not blobs:
+            return {"files": {}}
+            
         files = {}
         for blob in blobs:
             if blob.name.endswith(".pdf"):
@@ -81,27 +82,19 @@ async def list_files():
                     expiration=timedelta(minutes=15),
                     method="GET"
                 )
-                files[file_name] = {
-                    "url": url,
-                    "created": blob.time_created.isoformat(),
-                    "size": blob.size
-                }
+                files[file_name] = url
         return {"files": files}
     except Exception as e:
-        logging.error(f"Error fetching files from Firebase Storage: {str(e)}", exc_info=True)
-        raise HTTPException(
-            status_code=500,
-            detail="Failed to retrieve files. Please try again later."
-        )
+        logging.error(f"Error listing files: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/summarize/url")
-async def summarize_url(request: Request):
+async def summarize_url(
+    url: str = Form(...),
+    custom_prompt: str = Form(...),
+    override_base_name: str = Form("")
+):
     try:
-        data = await request.json()
-        url = data.get("url")
-        custom_prompt = data.get("custom_prompt")
-        override_base_name = data.get("override_base_name", "")
-        
         if not url:
             raise HTTPException(status_code=400, detail="No URL provided")
         
@@ -116,11 +109,14 @@ async def summarize_url(request: Request):
         )
         return result
     except Exception as e:
-        logging.error(f"Error in summarize_url: {str(e)}", exc_info=True)
+        logging.error(f"Error in summarize_url: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/summarize/upload")
-async def summarize_upload(file: UploadFile = File(...), custom_prompt: str = Form(...)):
+async def summarize_upload(
+    file: UploadFile = File(...),
+    custom_prompt: str = Form(...)
+):
     try:
         result = await process_input(
             input_data=file,
@@ -131,7 +127,7 @@ async def summarize_upload(file: UploadFile = File(...), custom_prompt: str = Fo
         )
         return result
     except Exception as e:
-        logging.error(f"Error in summarize_upload: {str(e)}", exc_info=True)
+        logging.error(f"Error in summarize_upload: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":

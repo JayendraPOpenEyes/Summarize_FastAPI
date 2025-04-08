@@ -394,7 +394,7 @@ Mention effective date if it is there inside the document at the end.`;
       e.preventDefault();
       const formData = new FormData(this);
       const inputType = formData.get('inputType');
-      const customPrompt = formData.get('customPrompt');
+      const customPrompt = formData.get('customPrompt');  
 
       document.getElementById('loading').classList.remove('hidden');
       document.getElementById('result').innerHTML = '';
