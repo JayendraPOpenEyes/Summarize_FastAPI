@@ -1,10 +1,8 @@
-# summary.py
 import re
 import io
 import json
 import time
 import logging
-import fitz
 import asyncio
 import aiohttp
 from concurrent.futures import ThreadPoolExecutor
@@ -15,51 +13,18 @@ from bs4 import BeautifulSoup
 from PIL import Image
 from pdf2image import convert_from_bytes
 import pytesseract
+import fitz
 import openai
-import firebase_admin
-from firebase_admin import credentials, firestore, storage
-import os
 from dotenv import load_dotenv
+import os
 
 load_dotenv()
 logging.basicConfig(level=logging.DEBUG, format="%(asctime)s - %(levelname)s - %(message)s")
 
-# Firebase initialization block
-if not firebase_admin._apps:
-    try:
-        firebase_cred_path = "firebase-adminsdk.json"
-        creds_data = None
-
-        # First, try to load credentials from the local file.
-        if os.path.exists(firebase_cred_path):
-            logging.debug(f"Found {firebase_cred_path} locally. Loading credentials from file.")
-            with open(firebase_cred_path, 'r') as f:
-                creds_data = json.load(f)
-        else:
-            # Fallback: Try to load credentials from environment variable.
-            logging.debug("Local firebase-adminsdk.json not found. Checking environment variable.")
-            firebase_creds_env = os.environ.get("FIREBASE_CREDENTIALS")
-            if firebase_creds_env:
-                logging.debug("Firebase credentials found in environment variable. Loading credentials from env.")
-                creds_data = json.loads(firebase_creds_env)
-                # Optionally write the credentials to a file if you need the file for further use.
-                with open(firebase_cred_path, 'w') as f:
-                    json.dump(creds_data, f)
-            else:
-                raise FileNotFoundError("Firebase credentials not found. Provide them via file or environment variable.")
-
-        # Initialize Firebase with the credentials dictionary.
-        cred = credentials.Certificate(creds_data)
-        bucket_name = f"{creds_data['project_id']}.appspot.com"
-        logging.debug(f"Constructed bucket name: {bucket_name}")
-        firebase_admin.initialize_app(cred, {'storageBucket': bucket_name})
-        logging.info(f"Firebase initialized with storage bucket: {bucket_name}")
-    except Exception as e:
-        logging.error(f"Failed to initialize Firebase: {str(e)}")
-        raise
-
-# Firestore client initialization (if needed)
-db = firestore.client(database_id="statside-summary")
+# Import the initialized Firestore client and storage bucket from firebase_init.py
+from firebase_init import db, bucket
+# Add this import to use Firestore constants like SERVER_TIMESTAMP.
+from firebase_admin import firestore
 
 class TextProcessor:
     def __init__(self, model):
@@ -313,14 +278,14 @@ class TextProcessor:
             raise e
         except Exception as e:
             raise ValueError(f"Unexpected error during summary generation: {str(e)}")
-        # #if "Error" not in summary["summary"]:
-        #     effective_date_pattern = r"(effective\s+(?:date\s*(?:is|of|:)?|on)|takes\s+effect\s+(?:on)?)\s*[:\s]*(?:(January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2}(?:st|nd|rd|th)?[,\s]+\d{4}|\d{1,2}(?:st|nd|rd|th)?\s+(January|February|March|April|May|June|July|August|September|October|November|December)[,\s]+\d{4}|\d{4}-\d{2}-\d{2}|\d{2}/\d{2}/\d{4})"
-        #     match = re.search(effective_date_pattern, text, re.IGNORECASE)
-        #     if match:
-        #         date_str = (match.group(0).split(":", 1)[-1].strip() if ":" in match.group(0)
-        #                     else match.group(0).split("on", 1)[-1].strip() if "on" in match.group(0)
-        #                     else match.group(0).split("effect", 1)[-1].strip())
-        #         summary["summary"] += f"\nThis measure has an effective date of: {date_str}"
+        if "Error" not in summary["summary"]:
+            effective_date_pattern = r"(effective\s+(?:date\s*(?:is|of|:)?|on)|takes\s+effect\s+(?:on)?)\s*[:\s]*(?:(January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2}(?:st|nd|rd|th)?[,\s]+\d{4}|\d{1,2}(?:st|nd|rd|th)?\s+(January|February|March|April|May|June|July|August|September|October|November|December)[,\s]+\d{4}|\d{4}-\d{2}-\d{2}|\d{2}/\d{2}/\d{4})"
+            match = re.search(effective_date_pattern, text, re.IGNORECASE)
+            if match:
+                date_str = (match.group(0).split(":", 1)[-1].strip() if ":" in match.group(0)
+                            else match.group(0).split("on", 1)[-1].strip() if "on" in match.group(0)
+                            else match.group(0).split("effect", 1)[-1].strip())
+                summary["summary"] += f"\nThis measure has an effective date of: {date_str}"
         input_data = base_name if base_name.startswith(("http://", "https://")) else base_name
         try:
             summary_data = {

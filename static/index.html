@@ -1,11 +1,10 @@
-<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Bill Summarization</title>
   <style>
-    /* Reset some defaults for full width layout */
+    /* Global Styles */
     body, html {
       margin: 0;
       padding: 0;
@@ -16,29 +15,29 @@
     }
     .container {
       max-width: 1200px;
-      margin: 0 auto;
-      padding: 10px;
+      margin: 20px auto;
+      padding: 20px;
       background-color: #fff;
-      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+      box-shadow: 0 4px 16px rgba(0,0,0,0.15);
       border-radius: 8px;
     }
     header {
       text-align: center;
-      padding: 10px 0;
+      padding-bottom: 20px;
     }
     header img {
       width: 200px;
-      border-radius: 0px;
     }
     header h1 {
       margin: 10px 0;
-      font-size: 2rem;
+      font-size: 2.5rem;
       color: #4CAF50;
     }
     header p {
-      font-size: 1rem;
+      font-size: 1.1rem;
       color: #666;
     }
+    /* Summarization form styles */
     form {
       display: flex;
       flex-direction: column;
@@ -46,7 +45,7 @@
       padding: 20px;
       background-color: #f9f9f9;
       border-radius: 8px;
-      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
     }
     .form-group {
       margin-bottom: 15px;
@@ -57,17 +56,16 @@
       display: block;
       color: #555;
     }
-    input[type="text"],
     input[type="url"],
     input[type="file"],
     textarea,
     select {
       width: 100%;
-      padding: 10px;
+      padding: 12px;
       border: 1px solid #ccc;
       border-radius: 4px;
-      box-sizing: border-box;
       font-size: 1rem;
+      box-sizing: border-box;
     }
     textarea {
       resize: vertical;
@@ -76,17 +74,34 @@
     button.submit-btn {
       background-color: #4CAF50;
       color: white;
-      padding: 8px 16px;
+      padding: 12px 20px;
       border: none;
       border-radius: 4px;
       cursor: pointer;
       font-size: 1rem;
-      width: 150px;
-      margin: 0 auto;
+      align-self: center;
+      transition: background-color 0.3s;
     }
     button.submit-btn:hover {
       background-color: #45a049;
     }
+    /* My Summaries Button Style */
+    #open-dashboard-btn {
+      background-color: #007BFF;
+      color: white;
+      border: none;
+      padding: 10px 18px;
+      font-size: 1rem;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: background-color 0.3s;
+      display: inline-block;
+      margin: 10px 0;
+    }
+    #open-dashboard-btn:hover {
+      background-color: #0056b3;
+    }
+    /* Progress Bar styles */
     #progress-container {
       width: 100%;
       background-color: #ddd;
@@ -102,6 +117,7 @@
       background-color: #4CAF50;
       transition: width 0.4s ease;
     }
+    /* Progress text inside the progress bar */
     #progress-text {
       position: absolute;
       width: 100%;
@@ -110,6 +126,7 @@
       font-size: 0.9rem;
       color: #fff;
     }
+    /* Extra progress message below the progress bar */
     #progress-extra {
       text-align: center;
       margin-top: 5px;
@@ -144,11 +161,13 @@
       height: 20px;
       cursor: pointer;
     }
+    /* Feedback Section Styling */
     .feedback-section {
       margin-top: 0;
       padding-top: 0;
       position: relative;
     }
+    /* Position like/dislike buttons in a flex container at top right */
     .feedback-buttons {
       position: absolute;
       top: 5px;
@@ -167,6 +186,7 @@
     .feedback-buttons button:hover {
       background-color: #ddd;
     }
+    /* Adjust textarea and submit button so they align to the left */
     .feedback-section textarea.feedback-comment {
       display: block;
       margin-top: 40px;
@@ -229,6 +249,10 @@
       <h1>Bill Summarization</h1>
       <p>Enter a URL, upload a PDF, or choose a file to generate summaries.</p>
     </header>
+    <!-- My Summaries button -->
+    <div style="text-align: right;">
+      <button id="open-dashboard-btn" onclick="window.location.href='/dashboard'">Previously Generated</button>
+    </div>
     <form id="summarize-form">
       <div class="form-group">
         <label for="inputType">Select Input Type</label>
@@ -262,10 +286,12 @@
       </div>
       <button type="submit" class="submit-btn">Summarize</button>
     </form>
+    <!-- Progress bar below the Summarize button -->
     <div id="progress-container" class="hidden">
       <div id="progress-bar"></div>
       <div id="progress-text"></div>
     </div>
+    <!-- Extra progress message if processing takes long -->
     <div id="progress-extra" class="hidden"></div>
     <div id="loading" class="hidden">
       <p>Processing... Please wait.</p>
@@ -278,12 +304,13 @@
   <script>
     // Sample Prompt functionality
     const samplePromptText = `Summarize the provided legislative document, focusing only on new provisions introduced by this bill.
-Start summary with 'This measure...'.
+Start each summary with 'This measure...'.
 The summary must be at least one paragraph long (minimum 4-6 sentences) and no longer than a full page,
 detailing key changes such as definitions, rules, or exemptions, without including opinions, current laws,
 or repetitive statements.
-Do not add a title, introduction, or conclusion (e.g., 'in summary'); the entire text should be the summary.
-Mention effective date if it is there inside the document at the end.`;
+Do not add a title, introduction, or conclusion; the entire text should be the summary.
+If the document specifies an effective date, end the summary with 'This measure has an effective date of: [date]',
+using the exact date provided.`;
 
     document.getElementById('samplePromptButton').addEventListener('click', function() {
       document.getElementById('customPrompt').value = samplePromptText;
@@ -320,45 +347,26 @@ Mention effective date if it is there inside the document at the end.`;
       try {
         const response = await fetch('/list_files');
         if (!response.ok) throw new Error('Could not fetch file list');
-        const data = await response.json(); // Expecting {"files": {"file1.pdf": "signed_url1", "file2.pdf": "signed_url2"}}
-        const files = data.files;
-        const chooseFileEl = document.getElementById('chooseFile');
-        const overrideBaseNameEl = document.getElementById('overrideBaseName');
-
-        chooseFileEl.innerHTML = ""; // Clear existing options
-        // Add a default option
-        const defaultOption = document.createElement('option');
-        defaultOption.value = "";
-        defaultOption.textContent = "Choose a Uploaded File";
-        defaultOption.disabled = true;
-        defaultOption.selected = true;
-        chooseFileEl.appendChild(defaultOption);
-
-        // Populate options with file names and set values to signed URLs
+        const files = await response.json();
+        chooseFileEl.innerHTML = "";
         for (const [fileName, fileUrl] of Object.entries(files)) {
           const option = document.createElement('option');
-          option.value = fileUrl; // Use signed URL as value
-          option.textContent = fileName; // Display file name
-          option.setAttribute('data-filename', fileName); // Store filename for overrideBaseName
+          option.value = fileUrl;  // signed URL
+          option.textContent = fileName;
+          option.setAttribute('data-filename', fileName);
           chooseFileEl.appendChild(option);
         }
-
-        // Set the default overrideBaseName if there are options
-        if (chooseFileEl.options.length > 1) {
-          overrideBaseNameEl.value = chooseFileEl.options[1].getAttribute('data-filename');
-        } else {
-          overrideBaseNameEl.value = ""; // Clear if no files
+        if (chooseFileEl.options.length > 0) {
+          overrideBaseNameEl.value = chooseFileEl.options[0].getAttribute('data-filename');
         }
       } catch (error) {
-        console.error('Error fetching files:', error);
-        chooseFileEl.innerHTML = "<option value=''>No files available</option>"; // Fallback message
-        overrideBaseNameEl.value = "";
+        console.error(error);
       }
     }
 
     chooseFileEl.addEventListener('change', function() {
       const selectedOption = this.options[this.selectedIndex];
-      overrideBaseNameEl.value = selectedOption.getAttribute('data-filename') || "";
+      overrideBaseNameEl.value = selectedOption.getAttribute('data-filename');
     });
 
     // Typewriter Effect function
@@ -394,7 +402,7 @@ Mention effective date if it is there inside the document at the end.`;
       e.preventDefault();
       const formData = new FormData(this);
       const inputType = formData.get('inputType');
-      const customPrompt = formData.get('customPrompt');  
+      const customPrompt = formData.get('customPrompt');
 
       document.getElementById('loading').classList.remove('hidden');
       document.getElementById('result').innerHTML = '';
@@ -412,11 +420,13 @@ Mention effective date if it is there inside the document at the end.`;
       const startTime = Date.now();
 
       const interval = setInterval(() => {
+        // Increase progress until 90%
         if (progress < 90) {
           progress += 10;
           progressBar.style.width = progress + '%';
           progressText.textContent = progress + '%';
         }
+        // If more than 30 seconds have elapsed, show extra message
         if (Date.now() - startTime > 30000) {
           progressExtra.classList.remove('hidden');
           progressExtra.textContent = `Processing is taking longer than usual. It might take 2–3 minutes. Current progress: ${progress}%`;
@@ -463,26 +473,65 @@ Mention effective date if it is there inside the document at the end.`;
         const resultContainer = document.getElementById('result');
         resultContainer.innerHTML = "";
 
-        // Create summary box (single model for now, adjust as needed)
-        const box = document.createElement('div');
-        box.classList.add('result-box');
-        const title = document.createElement('h3');
-        title.textContent = `Summary (Model: ${resultData.model})`;
-        box.appendChild(title);
-        const copyIcon = document.createElement('img');
-        copyIcon.src = "/static/copy-icon.jpg";
-        copyIcon.alt = "Copy";
-        copyIcon.classList.add('copy-icon');
-        copyIcon.addEventListener('click', function() {
-          toggleCopyIcon(copyIcon, resultData.summary);
+        // Create summary box for Model 1 (GPT-4 Summary)
+        const boxGPT4 = document.createElement('div');
+        boxGPT4.classList.add('result-box');
+        const titleGPT4 = document.createElement('h3');
+        titleGPT4.textContent = "Model 1";
+        boxGPT4.appendChild(titleGPT4);
+        const copyIconGPT4 = document.createElement('img');
+        copyIconGPT4.src = "/static/copy-icon.jpg";
+        copyIconGPT4.alt = "Copy";
+        copyIconGPT4.classList.add('copy-icon');
+        copyIconGPT4.addEventListener('click', function() {
+          toggleCopyIcon(copyIconGPT4, resultData.gpt4.summary);
         });
-        box.appendChild(copyIcon);
-        const content = document.createElement('p');
-        box.appendChild(content);
-        resultContainer.appendChild(box);
-        typewriterEffect(content, resultData.summary);
-        addFeedbackControls(box, resultData.summary_id, resultData.model);
+        boxGPT4.appendChild(copyIconGPT4);
+        const contentGPT4 = document.createElement('p');
+        boxGPT4.appendChild(contentGPT4);
+        resultContainer.appendChild(boxGPT4);
+        typewriterEffect(contentGPT4, resultData.gpt4.summary);
+        addFeedbackControls(boxGPT4, resultData.gpt4.summary_id, "GPT-4");
 
+        // Create summary box for Model 2 (GPT-4-mini Summary)
+        const boxGPT4mini = document.createElement('div');
+        boxGPT4mini.classList.add('result-box');
+        const titleGPT4mini = document.createElement('h3');
+        titleGPT4mini.textContent = "Model 2";
+        boxGPT4mini.appendChild(titleGPT4mini);
+        const copyIconGPT4mini = document.createElement('img');
+        copyIconGPT4mini.src = "/static/copy-icon.jpg";
+        copyIconGPT4mini.alt = "Copy";
+        copyIconGPT4mini.classList.add('copy-icon');
+        copyIconGPT4mini.addEventListener('click', function() {
+          toggleCopyIcon(copyIconGPT4mini, resultData.gpt4mini.summary);
+        });
+        boxGPT4mini.appendChild(copyIconGPT4mini);
+        const contentGPT4mini = document.createElement('p');
+        boxGPT4mini.appendChild(contentGPT4mini);
+        resultContainer.appendChild(boxGPT4mini);
+        typewriterEffect(contentGPT4mini, resultData.gpt4mini.summary);
+        addFeedbackControls(boxGPT4mini, resultData.gpt4mini.summary_id, "GPT-4-mini");
+
+        // Create summary box for Model 3 (TogetherAI Summary)
+        const boxTogether = document.createElement('div');
+        boxTogether.classList.add('result-box');
+        const titleTogether = document.createElement('h3');
+        titleTogether.textContent = "Model 3";
+        boxTogether.appendChild(titleTogether);
+        const copyIconTogether = document.createElement('img');
+        copyIconTogether.src = "/static/copy-icon.jpg";
+        copyIconTogether.alt = "Copy";
+        copyIconTogether.classList.add('copy-icon');
+        copyIconTogether.addEventListener('click', function() {
+          toggleCopyIcon(copyIconTogether, resultData.togetherai.summary);
+        });
+        boxTogether.appendChild(copyIconTogether);
+        const contentTogether = document.createElement('p');  
+        boxTogether.appendChild(contentTogether);
+        resultContainer.appendChild(boxTogether);
+        typewriterEffect(contentTogether, resultData.togetherai.summary);
+        addFeedbackControls(boxTogether, resultData.togetherai.summary_id, "TogetherAI");
       } catch (error) {
         document.getElementById('result').innerHTML = '<p style="color:red;">' + error + '</p>';
       } finally {
@@ -501,6 +550,7 @@ Mention effective date if it is there inside the document at the end.`;
     function addFeedbackControls(box, summary_id, modelLabel) {
       const feedbackDiv = document.createElement('div');
       feedbackDiv.classList.add('feedback-section');
+      // Feedback controls: like/dislike buttons and comment area with submit button
       feedbackDiv.innerHTML = `
         <div class="feedback-buttons">
           <button class="feedback-btn" data-feedback="like">👍</button>

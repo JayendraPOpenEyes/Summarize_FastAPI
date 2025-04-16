@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>My Summaries</title>
+  <style>
+    body, html {
+      margin: 0;
+      padding: 0;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background-color: #f7f9fc;
+    }
+    .container {
+      max-width: 1200px;
+      margin: 20px auto;
+      padding: 20px;
+      background: #ffffff;
+      border-radius: 8px;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.1);
+    }
+    header {
+      text-align: center;
+      margin-bottom: 20px;
+    }
+    header h1 {
+      color: #4CAF50;
+    }
+    .filters {
+      display: flex;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 12px;
+      margin-bottom: 20px;
+    }
+    .filters input, .filters select {
+      padding: 8px;
+      font-size: 1rem;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+    }
+    .summary-card {
+      border: 1px solid #ccc;
+      border-radius: 6px;
+      padding: 16px;
+      margin-bottom: 16px;
+      background-color: #f9f9f9;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    }
+    .summary-field {
+      margin-bottom: 8px;
+    }
+    .summary-field strong {
+      display: inline-block;
+      width: 180px;
+      color: #333;
+    }
+    #back-button {
+      display: inline-block;
+      margin-bottom: 20px;
+      background-color: #007BFF;
+      color: #fff;
+      padding: 8px 16px;
+      text-decoration: none;
+      border-radius: 4px;
+    }
+    #back-button:hover {
+      background-color: #0056b3;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <a id="back-button" href="/">← Back to Home</a>
+    <header>
+      <h1>My Summaries</h1>
+    </header>
+
+    <div class="filters">
+      <input type="text" id="search-input" placeholder="Search keywords...">
+      <select id="model-filter">
+        <option value="">Filter by Model</option>
+      </select>
+      <select id="date-filter">
+        <option value="">Filter by Date</option>
+      </select>
+    </div>
+
+    <div id="summary-list"><p>Loading summaries...</p></div>
+  </div>
+
+  <script>
+    let allSummaries = [];
+
+    function formatDate(dateString) {
+      const d = new Date(dateString);
+      return d.toISOString().split('T')[0];
+    }
+
+    function renderSummaries(filtered = []) {
+      const container = document.getElementById('summary-list');
+      container.innerHTML = '';
+
+      if (!filtered.length) {
+        container.innerHTML = '<p>No summaries found.</p>';
+        return;
+      }
+
+      filtered.forEach(doc => {
+        const card = document.createElement('div');
+        card.className = 'summary-card';
+
+        const addField = (label, value) => {
+          if (value) {
+            const div = document.createElement('div');
+            div.className = 'summary-field';
+            div.innerHTML = `<strong>${label}:</strong> ${value}`;
+            card.appendChild(div);
+          }
+        };
+
+        addField("Base Name", doc.base_name);
+        addField("Input Data", doc.input_data);
+        addField("Model", doc.model);
+        addField("Summary", doc.summary);
+        addField("Custom Prompt", doc.custom_prompt);
+        addField("Feedback", doc.feedback);
+        if (doc.feedback_timestamp) {
+          addField("Feedback Time", new Date(doc.feedback_timestamp.seconds * 1000).toLocaleString());
+        }
+        if (doc.timestamp) {
+          addField("Timestamp", new Date(doc.timestamp.seconds * 1000).toLocaleString());
+        }
+
+        container.appendChild(card);
+      });
+    }
+
+    function applyFilters() {
+      const search = document.getElementById('search-input').value.toLowerCase();
+      const model = document.getElementById('model-filter').value;
+      const date = document.getElementById('date-filter').value;
+
+      const filtered = allSummaries.filter(doc => {
+        const matchesSearch = Object.values(doc).some(val =>
+          typeof val === 'string' && val.toLowerCase().includes(search)
+        );
+        const matchesModel = model === '' || doc.model === model;
+        const matchesDate = date === '' || formatDate(new Date(doc.timestamp.seconds * 1000)) === date;
+
+        return matchesSearch && matchesModel && matchesDate;
+      });
+
+      renderSummaries(filtered);
+    }
+
+    async function fetchSummaries() {
+      try {
+        const res = await fetch('/summaries');
+        const data = await res.json();
+        allSummaries = data.summaries || [];
+
+        // Sort by latest timestamp
+        allSummaries.sort((a, b) =>
+          (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0)
+        );
+
+        // Populate filters
+        const modelSet = new Set();
+        const dateSet = new Set();
+        allSummaries.forEach(doc => {
+          if (doc.model) modelSet.add(doc.model);
+          if (doc.timestamp?.seconds) dateSet.add(formatDate(new Date(doc.timestamp.seconds * 1000)));
+        });
+
+        const modelFilter = document.getElementById('model-filter');
+        modelSet.forEach(model => {
+          const opt = document.createElement('option');
+          opt.value = model;
+          opt.textContent = model;
+          modelFilter.appendChild(opt);
+        });
+
+        const dateFilter = document.getElementById('date-filter');
+        Array.from(dateSet).sort().reverse().forEach(date => {
+          const opt = document.createElement('option');
+          opt.value = date;
+          opt.textContent = date;
+          dateFilter.appendChild(opt);
+        });
+
+        // Initial render
+        renderSummaries(allSummaries);
+
+        // Event listeners
+        document.getElementById('search-input').addEventListener('input', applyFilters);
+        document.getElementById('model-filter').addEventListener('change', applyFilters);
+        document.getElementById('date-filter').addEventListener('change', applyFilters);
+
+      } catch (err) {
+        console.error("Failed to fetch summaries:", err);
+        document.getElementById('summary-list').innerHTML = '<p>Error loading summaries.</p>';
+      }
+    }
+
+    window.onload = fetchSummaries;
+  </script>
+</body>
+</html>
